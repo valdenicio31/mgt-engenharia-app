@@ -3,7 +3,8 @@ services:
     name: mgt-engenharia-homologacao
     runtime: python
     plan: free
-    buildCommand: ./build.sh
+    region: virginia
+    buildCommand: bash build.sh
     startCommand: gunicorn config.wsgi:application
     healthCheckPath: /health/
     autoDeployTrigger: commit
