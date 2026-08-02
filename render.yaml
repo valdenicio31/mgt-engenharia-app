@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: mgt-engenharia-homologacao
+    runtime: python
+    plan: free
+    buildCommand: ./build.sh
+    startCommand: gunicorn config.wsgi:application
+    healthCheckPath: /health/
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: DATABASE_URL
+        sync: false
+      - key: ALLOWED_HOSTS
+        value: .onrender.com,homologacao-mgt.viaiasolucoes.com
+      - key: CSRF_TRUSTED_ORIGINS
+        value: https://homologacao-mgt.viaiasolucoes.com
