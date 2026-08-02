@@ -1,8 +1,9 @@
+from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
-from .forms import ClientForm, OpportunityForm, ProjectForm, TaskForm
+from .forms import ClientForm, FirstAccessForm, OpportunityForm, ProjectForm, TaskForm
 from .models import AuditLog, Client, Opportunity, Project, Proposal, RAT, Task
 
 def health(request):
@@ -10,6 +11,17 @@ def health(request):
         cursor.execute("SELECT 1")
         cursor.fetchone()
     return JsonResponse({"status": "ok", "service": "mgt-engenharia"})
+
+def first_access(request):
+    if request.user.is_authenticated:
+        return redirect("dashboard")
+    form = FirstAccessForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        user = form.save()
+        login(request, user, backend="core.authentication.EmailOrCPFBackend")
+        AuditLog.objects.create(actor=user, action="primeiro_acesso", entity="User", entity_id=str(user.pk))
+        return redirect("dashboard")
+    return render(request, "registration/first_access.html", {"form": form})
 
 @login_required
 def dashboard(request):
