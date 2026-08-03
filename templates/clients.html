@@ -1,10 +1,12 @@
 {% extends 'base.html' %}
 {% block heading %}{{ title }}{% endblock %}
 {% block content %}
-<section class="clients-layout">
+<section class="clients-layout{% if not show_form %} clients-layout-list-only{% endif %}">
   <article class="panel clients-list">
-    <div class="records-heading"><div><h2>🏢 Registros</h2><small>Importe, filtre, ordene ou exporte a base de condomínios.</small></div>
+    <div class="records-heading">
+      <div><h2>🏢 Condomínios cadastrados</h2><small>Consulte, filtre, ordene e selecione os condomínios da base.</small></div>
       <div class="data-actions">
+        <a class="primary-button" href="{% url 'clients' %}?novo=1">➕ Novo condomínio</a>
         <form action="{% url 'clients_import' %}" method="post" enctype="multipart/form-data" class="import-form">{% csrf_token %}
           <label class="file-button">📥 Importar arquivo<input type="file" name="file" accept=".xlsx,.csv,.txt,.xml" required onchange="this.form.submit()"></label>
         </form>
@@ -18,31 +20,193 @@
       <select name="validacao"><option value="">Todas as validações</option><option value="validar" {% if filters.validacao == 'validar' %}selected{% endif %}>Validar</option><option value="confirmado" {% if filters.validacao == 'confirmado' %}selected{% endif %}>Confirmado</option><option value="descartado" {% if filters.validacao == 'descartado' %}selected{% endif %}>Descartado</option></select>
       <button type="submit">🔍 Filtrar</button><a href="{% url 'clients' %}" class="secondary-button">✖ Limpar</a>
     </form>
+
+    <div class="bulk-actions" aria-label="Ações em lote">
+      <label><input type="checkbox" id="select-all-clients"> Selecionar todos</label>
+      <strong id="selected-client-count">0 selecionado(s)</strong>
+      <button type="button" id="open-selected-autovistoria" disabled>🌐 Consultar Autovistoria</button>
+    </div>
+
     <p class="import-help">Clique no título das colunas para ordenar. A ordem inicial é Rua → Bairro → Condomínio.</p>
     <div class="table-scroll"><table><thead><tr>
+      <th class="select-column"><span class="sr-only">Selecionar</span></th>
       <th>Foto</th>
-      <th><a href="?ordenar=nome&direcao={% if sort == 'nome' and direction == 'asc' %}desc{% else %}asc{% endif %}&q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}">Condomínio {% if sort == 'nome' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
-      <th><a href="?ordenar=rua&direcao={% if sort == 'rua' and direction == 'asc' %}desc{% else %}asc{% endif %}&q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}">Rua {% if sort == 'rua' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
-      <th><a href="?ordenar=bairro&direcao={% if sort == 'bairro' and direction == 'asc' %}desc{% else %}asc{% endif %}&q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}">Bairro {% if sort == 'bairro' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
-      <th><a href="?ordenar=processo&direcao={% if sort == 'processo' and direction == 'asc' %}desc{% else %}asc{% endif %}">Processo {% if sort == 'processo' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
-      <th><a href="?ordenar=notificacao&direcao={% if sort == 'notificacao' and direction == 'asc' %}desc{% else %}asc{% endif %}">Notificação {% if sort == 'notificacao' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
-      <th>Validação</th><th>Autuações</th><th>Ações</th>
+      <th class="excel-filter-column" data-filter-column="name"><div class="column-heading"><a href="?ordenar=nome&direcao={% if sort == 'nome' and direction == 'asc' %}desc{% else %}asc{% endif %}&q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}">Condomínio {% if sort == 'nome' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a><button type="button" class="column-filter-button" data-filter-key="name" title="Filtrar condomínio">▾</button></div></th>
+      <th class="excel-filter-column" data-filter-column="street"><div class="column-heading"><a href="?ordenar=rua&direcao={% if sort == 'rua' and direction == 'asc' %}desc{% else %}asc{% endif %}&q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}">Rua {% if sort == 'rua' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a><button type="button" class="column-filter-button" data-filter-key="street" title="Filtrar rua">▾</button></div></th>
+      <th class="excel-filter-column" data-filter-column="neighborhood"><div class="column-heading"><a href="?ordenar=bairro&direcao={% if sort == 'bairro' and direction == 'asc' %}desc{% else %}asc{% endif %}&q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}">Bairro {% if sort == 'bairro' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a><button type="button" class="column-filter-button" data-filter-key="neighborhood" title="Filtrar bairro">▾</button></div></th>
+      <th class="excel-filter-column" data-filter-column="process"><div class="column-heading"><a href="?ordenar=processo&direcao={% if sort == 'processo' and direction == 'asc' %}desc{% else %}asc{% endif %}">Processo {% if sort == 'processo' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a><button type="button" class="column-filter-button" data-filter-key="process" title="Filtrar processo">▾</button></div></th>
+      <th class="excel-filter-column" data-filter-column="notification"><div class="column-heading"><a href="?ordenar=notificacao&direcao={% if sort == 'notificacao' and direction == 'asc' %}desc{% else %}asc{% endif %}">Notificação {% if sort == 'notificacao' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a><button type="button" class="column-filter-button" data-filter-key="notification" title="Filtrar notificação">▾</button></div></th>
+      <th class="excel-filter-column" data-filter-column="validation"><div class="column-heading"><span>Validação</span><button type="button" class="column-filter-button" data-filter-key="validation" title="Filtrar validação">▾</button></div></th><th>Autuações</th><th>Ações</th>
     </tr></thead><tbody>
-    {% for item in items %}<tr>
+    {% for item in items %}<tr class="client-row" data-name="{{ item.name|default:''|escape }}" data-street="{{ item.street|default:''|escape }}" data-neighborhood="{{ item.neighborhood|default:''|escape }}" data-process="{{ item.process_number|default:''|escape }}" data-notification="{{ item.notification_number|default:''|escape }}" data-validation="{{ item.get_validation_display|default:''|escape }}">
+      <td class="select-column"><input class="client-selector" type="checkbox" value="{{ item.pk }}" data-consult-url="{% url 'client_autovistoria' item.pk %}" aria-label="Selecionar {{ item.name }}"></td>
       <td class="condo-photo-cell">{% if item.photo %}<img src="{{ item.photo.url }}" alt="Foto de {{ item.name }}">{% else %}<span>🏢</span>{% endif %}</td>
       <td><strong>{{ item.name }}</strong></td><td>{{ item.street|default:'—' }}{% if item.address_number %}, {{ item.address_number }}{% endif %}</td><td>{{ item.neighborhood|default:'—' }}</td><td>{{ item.process_number|default:'—' }}</td><td>{{ item.notification_number|default:'—' }}</td><td><span class="status status-{{ item.validation }}">{{ item.get_validation_display }}</span></td><td>{{ item.autovistoria_infractions.count }}</td>
-      <td class="row-actions"><a class="action-link" href="{% url 'client_autovistoria' item.pk %}">🌐 Consultar autuações</a><a class="action-link" href="?editar={{ item.pk }}">✏️ Alterar</a><form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">🗑️ Excluir</button></form></td>
-    </tr>{% empty %}<tr><td colspan="9">Nenhum registro.</td></tr>{% endfor %}
+      <td class="row-actions"><a class="action-link" href="{% url 'client_autovistoria' item.pk %}">🌐 Consultar</a><a class="action-link" href="?editar={{ item.pk }}">✏️ Alterar</a><form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">🗑️ Excluir</button></form></td>
+    </tr>{% empty %}<tr><td colspan="10">Nenhum condomínio encontrado.</td></tr>{% endfor %}
     </tbody></table></div>
+    <div id="excel-filter-menu" class="excel-filter-menu" hidden>
+      <div class="excel-filter-title"></div>
+      <input type="search" class="excel-filter-search" placeholder="Pesquisar nesta coluna">
+      <label class="excel-filter-select-all"><input type="checkbox"> Selecionar todos</label>
+      <div class="excel-filter-values"></div>
+      <div class="excel-filter-actions"><button type="button" class="excel-filter-apply">Aplicar</button><button type="button" class="excel-filter-clear secondary-button">Limpar filtro</button></div>
+    </div>
   </article>
-  <article class="panel client-form-panel"><h2>{% if editing %}Alterar cliente ou condomínio{% else %}Novo cliente ou condomínio{% endif %}</h2>
+
+  {% if show_form %}
+  <article class="panel client-form-panel"><div class="form-panel-heading"><h2>{% if editing %}Alterar condomínio{% else %}Novo condomínio{% endif %}</h2><a class="secondary-button" href="{% url 'clients' %}">✖ Fechar</a></div>
     <form method="post" enctype="multipart/form-data" class="form client-form">{% csrf_token %}{% if form.non_field_errors %}<div class="error">{{ form.non_field_errors }}</div>{% endif %}
       <fieldset><legend>Identificação e contato</legend><div class="form-grid">{% include 'partials/form_field.html' with field=form.photo wide=True %}{% include 'partials/form_field.html' with field=form.name wide=True %}{% include 'partials/form_field.html' with field=form.document %}{% include 'partials/form_field.html' with field=form.phone %}{% include 'partials/form_field.html' with field=form.email wide=True %}</div></fieldset>
       <fieldset><legend>Notificação do Diário Oficial</legend><div class="form-grid">{% include 'partials/form_field.html' with field=form.process_number %}{% include 'partials/form_field.html' with field=form.publication_date %}{% include 'partials/form_field.html' with field=form.notification_number %}{% include 'partials/form_field.html' with field=form.classification %}</div></fieldset>
       <fieldset><legend>Endereço</legend><div class="form-grid address-grid">{% include 'partials/form_field.html' with field=form.street wide=True %}{% include 'partials/form_field.html' with field=form.address_number %}{% include 'partials/form_field.html' with field=form.complement %}{% include 'partials/form_field.html' with field=form.neighborhood %}{% include 'partials/form_field.html' with field=form.city %}{% include 'partials/form_field.html' with field=form.state %}{% include 'partials/form_field.html' with field=form.postal_code %}</div></fieldset>
       <fieldset><legend>Tratamento da notificação</legend><div class="form-grid">{% include 'partials/form_field.html' with field=form.action_description wide=True %}{% include 'partials/form_field.html' with field=form.validation %}<div class="checkbox-field">{{ form.active }} <label for="{{ form.active.id_for_label }}">Registro ativo</label>{{ form.active.errors }}</div></div></fieldset>
-      <div class="form-actions"><button type="submit">{% if editing %}💾 Salvar alterações{% else %}💾 Salvar registro{% endif %}</button>{% if editing %}<a class="secondary-button" href="{% url 'clients' %}">✖ Cancelar</a>{% endif %}</div>
+      <div class="form-actions"><button type="submit">{% if editing %}💾 Salvar alterações{% else %}💾 Salvar condomínio{% endif %}</button><a class="secondary-button" href="{% url 'clients' %}">✖ Cancelar</a></div>
     </form>
   </article>
+  {% endif %}
 </section>
+<script>
+(function () {
+  const all = document.getElementById('select-all-clients');
+  const boxes = Array.from(document.querySelectorAll('.client-selector'));
+  const rows = Array.from(document.querySelectorAll('.client-row'));
+  const count = document.getElementById('selected-client-count');
+  const openButton = document.getElementById('open-selected-autovistoria');
+  const menu = document.getElementById('excel-filter-menu');
+  const menuTitle = menu.querySelector('.excel-filter-title');
+  const search = menu.querySelector('.excel-filter-search');
+  const selectAllValues = menu.querySelector('.excel-filter-select-all input');
+  const valuesBox = menu.querySelector('.excel-filter-values');
+  const applyButton = menu.querySelector('.excel-filter-apply');
+  const clearButton = menu.querySelector('.excel-filter-clear');
+  const filters = {};
+  let activeKey = null;
+  let activeButton = null;
+
+  const labels = {
+    name: 'Condomínio', street: 'Rua', neighborhood: 'Bairro',
+    process: 'Processo', notification: 'Notificação', validation: 'Validação'
+  };
+
+  function visibleRows() {
+    return rows.filter(row => !row.hidden);
+  }
+
+  function refreshSelection() {
+    const selected = boxes.filter(box => box.checked);
+    const visibleBoxes = visibleRows().map(row => row.querySelector('.client-selector'));
+    const visibleSelected = visibleBoxes.filter(box => box.checked);
+    count.textContent = selected.length + ' selecionado(s)';
+    openButton.disabled = selected.length === 0;
+    all.checked = visibleBoxes.length > 0 && visibleSelected.length === visibleBoxes.length;
+    all.indeterminate = visibleSelected.length > 0 && visibleSelected.length < visibleBoxes.length;
+  }
+
+  function applyFilters() {
+    rows.forEach(row => {
+      row.hidden = Object.entries(filters).some(([key, accepted]) => {
+        if (!accepted || accepted.size === 0) return false;
+        return !accepted.has((row.dataset[key] || '').trim());
+      });
+    });
+    document.querySelectorAll('.column-filter-button').forEach(button => {
+      button.classList.toggle('is-filtered', Boolean(filters[button.dataset.filterKey] && filters[button.dataset.filterKey].size));
+    });
+    refreshSelection();
+  }
+
+  function columnValues(key) {
+    return Array.from(new Set(rows.map(row => (row.dataset[key] || '').trim() || '(Em branco)')))
+      .sort((a, b) => a.localeCompare(b, 'pt-BR', {sensitivity: 'base'}));
+  }
+
+  function renderValueList(query) {
+    const term = (query || '').trim().toLocaleLowerCase('pt-BR');
+    Array.from(valuesBox.querySelectorAll('label')).forEach(label => {
+      label.hidden = term && !label.textContent.toLocaleLowerCase('pt-BR').includes(term);
+    });
+    updateSelectAllValues();
+  }
+
+  function updateSelectAllValues() {
+    const visibleChecks = Array.from(valuesBox.querySelectorAll('label:not([hidden]) input'));
+    const checked = visibleChecks.filter(input => input.checked);
+    selectAllValues.checked = visibleChecks.length > 0 && checked.length === visibleChecks.length;
+    selectAllValues.indeterminate = checked.length > 0 && checked.length < visibleChecks.length;
+  }
+
+  function openMenu(button) {
+    activeKey = button.dataset.filterKey;
+    activeButton = button;
+    menuTitle.textContent = 'Filtrar por ' + labels[activeKey];
+    valuesBox.innerHTML = '';
+    const current = filters[activeKey];
+    columnValues(activeKey).forEach(value => {
+      const rawValue = value === '(Em branco)' ? '' : value;
+      const label = document.createElement('label');
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = rawValue;
+      input.checked = !current || current.has(rawValue);
+      input.addEventListener('change', updateSelectAllValues);
+      label.append(input, document.createTextNode(' ' + value));
+      valuesBox.appendChild(label);
+    });
+    search.value = '';
+    renderValueList('');
+    const rect = button.getBoundingClientRect();
+    menu.hidden = false;
+    menu.style.left = Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - 300) + 'px';
+    menu.style.top = rect.bottom + window.scrollY + 6 + 'px';
+    search.focus();
+  }
+
+  all.addEventListener('change', function () {
+    visibleRows().forEach(row => row.querySelector('.client-selector').checked = all.checked);
+    refreshSelection();
+  });
+  boxes.forEach(box => box.addEventListener('change', refreshSelection));
+
+  document.querySelectorAll('.column-filter-button').forEach(button => {
+    button.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!menu.hidden && activeButton === button) menu.hidden = true;
+      else openMenu(button);
+    });
+  });
+
+  search.addEventListener('input', () => renderValueList(search.value));
+  selectAllValues.addEventListener('change', function () {
+    valuesBox.querySelectorAll('label:not([hidden]) input').forEach(input => input.checked = selectAllValues.checked);
+    updateSelectAllValues();
+  });
+  applyButton.addEventListener('click', function () {
+    const checked = Array.from(valuesBox.querySelectorAll('input:checked')).map(input => input.value);
+    const total = valuesBox.querySelectorAll('input').length;
+    if (checked.length === total) delete filters[activeKey];
+    else filters[activeKey] = new Set(checked);
+    menu.hidden = true;
+    applyFilters();
+  });
+  clearButton.addEventListener('click', function () {
+    delete filters[activeKey];
+    menu.hidden = true;
+    applyFilters();
+  });
+  document.addEventListener('click', event => {
+    if (!menu.hidden && !menu.contains(event.target) && !event.target.closest('.column-filter-button')) menu.hidden = true;
+  });
+
+  openButton.addEventListener('click', function () {
+    const selected = boxes.filter(box => box.checked);
+    if (!selected.length) return;
+    if (selected.length > 8 && !confirm('Você selecionou ' + selected.length + ' condomínios. Abrir todas as consultas?')) return;
+    selected.forEach((box, index) => setTimeout(() => window.open(box.dataset.consultUrl, '_blank'), index * 180));
+  });
+
+  refreshSelection();
+})();
+</script>
 {% endblock %}

@@ -185,7 +185,8 @@ def _crud(request, model, form_class, title, template="generic_list.html"):
             "cities": Client.objects.exclude(city="").values_list("city", flat=True).distinct().order_by("city"),
             "neighborhoods": Client.objects.exclude(neighborhood="").values_list("neighborhood", flat=True).distinct().order_by("neighborhood"),
         }
-    return render(request, template, {"title": title, "items": items[:100], "form": form, "editing": instance, "resource": resource, "filters": filters, "sort": sort, "direction": direction})
+    show_form = bool(instance or request.GET.get("novo") or (request.method == "POST" and form.errors))
+    return render(request, template, {"title": title, "items": items[:100], "form": form, "editing": instance, "show_form": show_form, "resource": resource, "filters": filters, "sort": sort, "direction": direction})
 
 @login_required
 def clients(request): return _crud(request, Client, ClientForm, "Clientes e condomínios", "clients.html")
