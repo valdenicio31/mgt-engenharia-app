@@ -16,10 +16,10 @@ from openpyxl import Workbook
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
-from .forms import AutovistoriaResultForm, ClientForm, FirstAccessForm, LandingLeadForm, OpportunityForm, ProjectForm, ProposalForm, TaskForm, UserProfileForm
+from .forms import AutovistoriaInfractionForm, ClientForm, FirstAccessForm, LandingLeadForm, OpportunityForm, ProjectForm, ProposalForm, TaskForm, UserProfileForm
 from .client_io import export_clients, import_clients
 from .gazette import fetch_notifications
-from .models import AuditLog, Client, GazetteFinding, LandingLead, Opportunity, Project, Proposal, RAT, Task
+from .models import AuditLog, AutovistoriaInfraction, Client, GazetteFinding, LandingLead, Opportunity, Project, Proposal, RAT, Task
 from .models import UserProfile
 
 def health(request):
@@ -152,6 +152,7 @@ def _crud(request, model, form_class, title, template="generic_list.html"):
     resource = {Client: "clientes", Opportunity: "oportunidades", Proposal: "propostas", Project: "projetos", Task: "tarefas"}[model]
     items = model.objects.all().order_by("-updated_at")
     filters = {}
+    sort = direction = ""
     if model is Client:
         search = (request.GET.get("q") or "").strip()
         city = (request.GET.get("cidade") or "").strip()
@@ -165,12 +166,26 @@ def _crud(request, model, form_class, title, template="generic_list.html"):
             items = items.filter(neighborhood__iexact=neighborhood)
         if validation:
             items = items.filter(validation=validation)
+        allowed_sorts = {
+            "nome": "name", "rua": "street", "bairro": "neighborhood", "cidade": "city",
+            "processo": "process_number", "notificacao": "notification_number", "atualizado": "updated_at",
+        }
+        sort = request.GET.get("ordenar", "rua")
+        direction = request.GET.get("direcao", "asc")
+        sort_field = allowed_sorts.get(sort, "street")
+        prefix = "-" if direction == "desc" else ""
+        if sort == "rua":
+            items = items.order_by(f"{prefix}street", f"{prefix}neighborhood", f"{prefix}name")
+        elif sort == "bairro":
+            items = items.order_by(f"{prefix}neighborhood", f"{prefix}street", f"{prefix}name")
+        else:
+            items = items.order_by(f"{prefix}{sort_field}", "name")
         filters = {
             "q": search, "cidade": city, "bairro": neighborhood, "validacao": validation,
             "cities": Client.objects.exclude(city="").values_list("city", flat=True).distinct().order_by("city"),
             "neighborhoods": Client.objects.exclude(neighborhood="").values_list("neighborhood", flat=True).distinct().order_by("neighborhood"),
         }
-    return render(request, template, {"title": title, "items": items[:100], "form": form, "editing": instance, "resource": resource, "filters": filters})
+    return render(request, template, {"title": title, "items": items[:100], "form": form, "editing": instance, "resource": resource, "filters": filters, "sort": sort, "direction": direction})
 
 @login_required
 def clients(request): return _crud(request, Client, ClientForm, "Clientes e condomínios", "clients.html")
@@ -187,38 +202,87 @@ def _client_consultation_address(client):
 @login_required
 def client_autovistoria(request, pk):
     client = get_object_or_404(Client, pk=pk, active=True)
-    form = AutovistoriaResultForm(request.POST or None, initial={"communication_number": client.notification_number})
     portal_url = "https://autovistoria.rio.rj.gov.br/ConsultaPublica.php"
+    form = AutovistoriaInfractionForm(
+        request.POST or None,
+        initial={"communication_number": client.notification_number, "source_url": portal_url},
+    )
     if request.method == "POST" and form.is_valid():
-        communication_number = form.cleaned_data["communication_number"].strip()
-        duplicate_filters = {"client": client, "source": "Autovistoria Rio"}
-        if communication_number:
-            duplicate_filters["communication_number"] = communication_number
+        infraction_number = form.cleaned_data["infraction_number"].strip()
+        if AutovistoriaInfraction.objects.filter(
+            client=client, infraction_number__iexact=infraction_number
+        ).exists():
+            form.add_error(
+                "infraction_number",
+                "Esta autuação já está cadastrada para este condomínio.",
+            )
         else:
-            duplicate_filters["title"] = _automatic_opportunity_title(client)
-        opportunity = Opportunity.objects.filter(**duplicate_filters).first()
-        created = opportunity is None
-        if created:
-            opportunity = Opportunity(client=client, owner=request.user, title=_automatic_opportunity_title(client))
-        opportunity.stage = "lead"
-        opportunity.source = "Autovistoria Rio"
-        opportunity.communication_number = communication_number
-        opportunity.consultation_status = form.cleaned_data["consultation_status"].strip()
-        opportunity.consultation_notes = form.cleaned_data["consultation_notes"].strip()
-        opportunity.consultation_address = _client_consultation_address(client)
-        opportunity.source_url = portal_url
-        opportunity.consulted_at = timezone.now()
-        opportunity.save()
-        if communication_number and client.notification_number != communication_number:
-            client.notification_number = communication_number
-            client.save(update_fields=("notification_number", "updated_at"))
-        AuditLog.objects.create(
-            actor=request.user, action="consulta_autovistoria", entity="Opportunity", entity_id=str(opportunity.pk),
-            details={"cliente": client.name, "comunicado": communication_number, "situacao": opportunity.consultation_status, "criado": created},
-        )
-        messages.success(request, "Oportunidade criada a partir da consulta." if created else "Oportunidade existente atualizada com o resultado da consulta.")
-        return redirect("opportunities")
-    return render(request, "client_autovistoria.html", {"client": client, "form": form, "portal_url": portal_url, "consultation_address": _client_consultation_address(client)})
+            with transaction.atomic():
+                infraction = form.save(commit=False)
+                infraction.client = client
+                opportunity = Opportunity.objects.filter(
+                    client=client, source="Autovistoria Rio"
+                ).order_by("pk").first()
+                created = opportunity is None
+                if created:
+                    opportunity = Opportunity(
+                        client=client,
+                        source="Autovistoria Rio",
+                        owner=request.user,
+                        title=_automatic_opportunity_title(client),
+                        stage="lead",
+                        estimated_value=0,
+                    )
+                if not opportunity.owner_id:
+                    opportunity.owner = request.user
+                opportunity.communication_number = infraction.communication_number
+                opportunity.consultation_status = infraction.get_status_display()
+                opportunity.consultation_notes = infraction.description
+                opportunity.consultation_address = _client_consultation_address(client)
+                opportunity.source_url = infraction.source_url or portal_url
+                opportunity.consulted_at = timezone.now()
+                opportunity.save()
+                infraction.opportunity = opportunity
+                finding = client.gazette_findings.order_by("-publication_date").first()
+                if finding:
+                    infraction.gazette_finding = finding
+                infraction.save()
+                if (
+                    infraction.communication_number
+                    and client.notification_number != infraction.communication_number
+                ):
+                    client.notification_number = infraction.communication_number
+                    client.save(update_fields=("notification_number", "updated_at"))
+                AuditLog.objects.create(
+                    actor=request.user,
+                    action="autuacao_autovistoria_importada",
+                    entity="AutovistoriaInfraction",
+                    entity_id=str(infraction.pk),
+                    details={
+                        "cliente": client.name,
+                        "autuacao": infraction.infraction_number,
+                        "oportunidade": opportunity.pk,
+                        "oportunidade_criada": created,
+                    },
+                )
+            messages.success(
+                request, "Autuação gravada e vinculada à oportunidade comercial."
+            )
+            return redirect("client_autovistoria", pk=client.pk)
+    infractions = client.autovistoria_infractions.select_related(
+        "opportunity", "gazette_finding"
+    ).all()
+    return render(
+        request,
+        "client_autovistoria.html",
+        {
+            "client": client,
+            "form": form,
+            "portal_url": portal_url,
+            "consultation_address": _client_consultation_address(client),
+            "infractions": infractions,
+        },
+    )
 
 
 def _automatic_opportunity_title(client):
@@ -392,9 +456,17 @@ def gazette_findings(request):
             findings = all_findings
             created = 0
             for item in findings:
-                _, was_created = GazetteFinding.objects.get_or_create(
+                finding, was_created = GazetteFinding.objects.get_or_create(
                     edition_id=item["edition_id"], notification_number=item["notification_number"], defaults=item
                 )
+                if not finding.client_id:
+                    client = Client.objects.filter(name__iexact=finding.condominium_name).first()
+                    if not client and finding.address:
+                        client = Client.objects.filter(street__icontains=finding.address[:80]).first()
+                    if client:
+                        finding.client = client
+                        finding.status = "conferido"
+                        finding.save(update_fields=("client", "status", "updated_at"))
                 created += int(was_created)
             period = f"{start_date:%d/%m/%Y} a {end_date:%d/%m/%Y}" if start_date else "edição mais recente"
             AuditLog.objects.create(actor=request.user, action="pesquisa_diario_oficial", entity="GazetteFinding", entity_id=period, details={"localizados": len(findings), "novos": created})

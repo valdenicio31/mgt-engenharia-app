@@ -37,6 +37,7 @@ class GazetteFinding(Timestamped):
     source_url = models.URLField(max_length=500)
     raw_excerpt = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS, default="novo")
+    client = models.ForeignKey("Client", null=True, blank=True, on_delete=models.SET_NULL, related_name="gazette_findings", verbose_name="condomínio vinculado")
 
     class Meta:
         ordering = ("-publication_date", "condominium_name")
@@ -92,6 +93,29 @@ class Opportunity(Timestamped):
     source_url = models.URLField("link da consulta", max_length=500, blank=True)
     consulted_at = models.DateTimeField("consultado em", null=True, blank=True)
     def __str__(self): return self.title
+
+
+class AutovistoriaInfraction(Timestamped):
+    STATUS = [("ativa", "Ativa"), ("regularizada", "Regularizada"), ("cancelada", "Cancelada"), ("desconhecida", "Não informada")]
+    client = models.ForeignKey(Client, verbose_name="condomínio", on_delete=models.CASCADE, related_name="autovistoria_infractions")
+    gazette_finding = models.ForeignKey(GazetteFinding, verbose_name="publicação do Diário Oficial", null=True, blank=True, on_delete=models.SET_NULL, related_name="infractions")
+    opportunity = models.ForeignKey(Opportunity, verbose_name="oportunidade", null=True, blank=True, on_delete=models.SET_NULL, related_name="infractions")
+    communication_number = models.CharField("número do comunicado", max_length=50, blank=True)
+    infraction_number = models.CharField("número da autuação", max_length=80)
+    infraction_type = models.CharField("tipo da autuação", max_length=180, blank=True)
+    description = models.TextField("descrição / exigência")
+    infraction_date = models.DateField("data da autuação", null=True, blank=True)
+    status = models.CharField("situação", max_length=20, choices=STATUS, default="ativa")
+    source_url = models.URLField("fonte da consulta", max_length=500, blank=True, default="https://autovistoria.rio.rj.gov.br/ConsultaPublica.php")
+    consulted_at = models.DateTimeField("consultado em", auto_now_add=True)
+
+    class Meta:
+        ordering = ("-consulted_at", "infraction_number")
+        constraints = [models.UniqueConstraint(fields=("client", "infraction_number"), name="unique_client_autovistoria_infraction")]
+
+    def __str__(self):
+        return f"{self.client} — {self.infraction_number}"
+
 
 class LandingLead(Timestamped):
     YES_NO = [(True, "Sim"), (False, "Não")]

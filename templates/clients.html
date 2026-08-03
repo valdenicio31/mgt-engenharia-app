@@ -28,19 +28,29 @@
     <p class="import-help">Formatos aceitos: Excel, CSV, TXT e XML — limite de 5 MB.</p>
     <div class="table-scroll">
       <table>
-        <thead><tr><th class="select-column"><input type="checkbox" id="select-all-clients" aria-label="Selecionar todos os condomínios"></th><th>Foto</th><th>Condomínio</th><th>Processo</th><th>Notificação</th><th>Validação</th><th>Atualizado</th><th>Ações</th></tr></thead>
+        <thead><tr>
+<th class="select-column"><input type="checkbox" id="select-all-clients" aria-label="Selecionar todos os condomínios"></th>
+<th>Foto</th>
+<th><a href="?q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}&ordenar=nome&direcao={% if sort == 'nome' and direction == 'asc' %}desc{% else %}asc{% endif %}">Condomínio {% if sort == 'nome' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
+<th><a href="?q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}&ordenar=rua&direcao={% if sort == 'rua' and direction == 'asc' %}desc{% else %}asc{% endif %}">Rua {% if sort == 'rua' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
+<th><a href="?q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}&ordenar=bairro&direcao={% if sort == 'bairro' and direction == 'asc' %}desc{% else %}asc{% endif %}">Bairro {% if sort == 'bairro' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
+<th><a href="?q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}&ordenar=processo&direcao={% if sort == 'processo' and direction == 'asc' %}desc{% else %}asc{% endif %}">Processo</a></th>
+<th><a href="?q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}&ordenar=notificacao&direcao={% if sort == 'notificacao' and direction == 'asc' %}desc{% else %}asc{% endif %}">Notificação</a></th>
+<th>Validação</th><th><a href="?ordenar=atualizado&direcao={% if sort == 'atualizado' and direction == 'asc' %}desc{% else %}asc{% endif %}">Atualizado</a></th><th>Ações</th></tr></thead>
         <tbody>
         {% for item in items %}
           <tr>
             <td class="select-column"><input class="client-selector" type="checkbox" name="client_ids" value="{{ item.pk }}" form="bulk-opportunities-form" aria-label="Selecionar {{ item.name }}"></td>
-            <td class="condo-photo-cell">{% if item.photo %}<img src="{{ item.photo.url }}" alt="Foto de {{ item.name }}">{% else %}<span>🏢</span>{% endif %}</td><td><strong>{{ item.name }}</strong><small>{{ item.street }}{% if item.address_number %}, {{ item.address_number }}{% endif %}{% if item.neighborhood %} — {{ item.neighborhood }}{% endif %}</small></td>
+            <td class="condo-photo-cell">{% if item.photo %}<img src="{{ item.photo.url }}" alt="Foto de {{ item.name }}">{% else %}<span>🏢</span>{% endif %}</td><td><strong>{{ item.name }}</strong></td>
+            <td>{{ item.street|default:"—" }}{% if item.address_number %}, {{ item.address_number }}{% endif %}</td>
+            <td>{{ item.neighborhood|default:"—" }}</td>
             <td>{{ item.process_number|default:"—" }}</td>
             <td>{{ item.notification_number|default:"—" }}</td>
             <td><span class="status status-{{ item.validation }}">{{ item.get_validation_display }}</span></td>
             <td>{{ item.updated_at|date:'d/m/Y H:i' }}</td>
             <td class="row-actions"><a class="action-link" href="{% url 'client_autovistoria' item.pk %}">🔎 Autovistoria</a><a class="action-link" href="?editar={{ item.pk }}">✏️ Alterar</a><form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">🗑️ Excluir</button></form></td>
           </tr>
-        {% empty %}<tr><td colspan="8">Nenhum registro.</td></tr>{% endfor %}
+        {% empty %}<tr><td colspan="10">Nenhum registro.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>

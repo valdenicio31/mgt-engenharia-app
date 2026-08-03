@@ -4,7 +4,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.db import transaction
-from .models import Client, LandingLead, Opportunity, Project, Proposal, Task, UserProfile
+from .models import AutovistoriaInfraction, Client, LandingLead, Opportunity, Project, Proposal, Task, UserProfile
 
 class EmailCPFAuthenticationForm(AuthenticationForm):
     username = forms.CharField(label="E-mail ou CPF", widget=forms.TextInput(attrs={"autofocus": True, "autocomplete": "username"}))
@@ -136,10 +136,15 @@ class UserProfileForm(forms.ModelForm):
         return profile
 
 
-class AutovistoriaResultForm(forms.Form):
-    communication_number = forms.CharField(label="Número do comunicado", max_length=50, required=False)
-    consultation_status = forms.CharField(label="Situação encontrada", max_length=180)
-    consultation_notes = forms.CharField(label="Observações", required=False, widget=forms.Textarea(attrs={"rows": 4}))
+class AutovistoriaInfractionForm(forms.ModelForm):
+    class Meta:
+        model = AutovistoriaInfraction
+        fields = ("communication_number", "infraction_number", "infraction_type", "description", "infraction_date", "status", "source_url")
+        widgets = {
+            "infraction_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "description": forms.Textarea(attrs={"rows": 5, "placeholder": "Copie ou descreva a exigência exibida no portal da Prefeitura."}),
+        }
+
 
 class OpportunityForm(forms.ModelForm):
     class Meta:
