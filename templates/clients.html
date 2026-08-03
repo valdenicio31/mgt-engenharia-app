@@ -6,10 +6,10 @@
     <div class="records-heading"><div><h2>Registros</h2><small>Importe ou exporte a base de condomínios.</small></div>
       <div class="data-actions">
         <form id="bulk-opportunities-form" action="{% url 'clients_to_opportunities' %}" method="post" onsubmit="return confirm('Transformar os condomínios selecionados em oportunidades de autovistoria?')">
-          {% csrf_token %}<button type="submit" class="bulk-opportunity-button">Criar oportunidades</button>
+          {% csrf_token %}<button type="submit" class="bulk-opportunity-button">🎯 Criar oportunidades</button>
         </form>
         <form action="{% url 'clients_import' %}" method="post" enctype="multipart/form-data" class="import-form">{% csrf_token %}
-          <label class="file-button">Importar arquivo<input type="file" name="file" accept=".xlsx,.csv,.txt,.xml" required onchange="this.form.submit()"></label>
+          <label class="file-button">📥 Importar arquivo<input type="file" name="file" accept=".xlsx,.csv,.txt,.xml" required onchange="this.form.submit()"></label>
         </form>
         <details class="export-menu"><summary>Exportar</summary><div>
           <a href="{% url 'clients_export' 'xlsx' %}">Excel (.xlsx)</a><a href="{% url 'clients_export' 'csv' %}">CSV (.csv)</a>
@@ -30,7 +30,7 @@
             <td>{{ item.notification_number|default:"—" }}</td>
             <td><span class="status status-{{ item.validation }}">{{ item.get_validation_display }}</span></td>
             <td>{{ item.updated_at|date:'d/m/Y H:i' }}</td>
-            <td class="row-actions"><a class="action-link" href="?editar={{ item.pk }}">Alterar</a><form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">Excluir</button></form></td>
+            <td class="row-actions"><a class="action-link" href="?editar={{ item.pk }}">✏️ Alterar</a><form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">🗑️ Excluir</button></form></td>
           </tr>
         {% empty %}<tr><td colspan="7">Nenhum registro.</td></tr>{% endfor %}
         </tbody>
@@ -38,10 +38,12 @@
     </div>
   </article>
 
+
   <article class="panel client-form-panel">
     <h2>{% if editing %}Alterar cliente ou condomínio{% else %}Novo cliente ou condomínio{% endif %}</h2>
     <form method="post" class="form client-form">{% csrf_token %}
       {% if form.non_field_errors %}<div class="error">{{ form.non_field_errors }}</div>{% endif %}
+
 
       <fieldset><legend>Identificação e contato</legend><div class="form-grid">
         {% include 'partials/form_field.html' with field=form.name wide=True %}
@@ -50,12 +52,14 @@
         {% include 'partials/form_field.html' with field=form.email wide=True %}
       </div></fieldset>
 
+
       <fieldset><legend>Notificação do Diário Oficial</legend><div class="form-grid">
         {% include 'partials/form_field.html' with field=form.process_number %}
         {% include 'partials/form_field.html' with field=form.publication_date %}
         {% include 'partials/form_field.html' with field=form.notification_number %}
         {% include 'partials/form_field.html' with field=form.classification %}
       </div></fieldset>
+
 
       <fieldset><legend>Endereço</legend><div class="form-grid address-grid">
         {% include 'partials/form_field.html' with field=form.street wide=True %}
@@ -66,6 +70,7 @@
         {% include 'partials/form_field.html' with field=form.state %}
         {% include 'partials/form_field.html' with field=form.postal_code %}
       </div></fieldset>
+
 
       <fieldset><legend>Tratamento da notificação</legend><div class="form-grid">
         {% include 'partials/form_field.html' with field=form.action_description wide=True %}
