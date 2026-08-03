@@ -85,6 +85,37 @@ class Opportunity(Timestamped):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="responsável", on_delete=models.PROTECT)
     def __str__(self): return self.title
 
+class LandingLead(Timestamped):
+    YES_NO = [(True, "Sim"), (False, "Não")]
+    syndic_name = models.CharField("síndico(a)", max_length=160)
+    email = models.EmailField("e-mail")
+    phone = models.CharField("celular", max_length=30)
+    legal_name = models.CharField("razão social", max_length=180)
+    document = models.CharField("CNPJ/CPF", max_length=20)
+    address = models.CharField("endereço", max_length=260)
+    postal_code = models.CharField("CEP", max_length=10)
+    building_age = models.PositiveSmallIntegerField("idade aproximada do prédio", null=True, blank=True)
+    floors = models.PositiveSmallIntegerField("nº de pavimentos", null=True, blank=True)
+    apartments = models.PositiveIntegerField("quantidade de apartamentos", null=True, blank=True)
+    stores = models.PositiveIntegerField("quantidade de lojas", null=True, blank=True)
+    duplex_penthouse = models.BooleanField("cobertura duplex", default=False, choices=YES_NO)
+    garage_floors = models.PositiveSmallIntegerField("andares de garagem", null=True, blank=True)
+    underground_garage = models.BooleanField("garagem no subsolo", default=False, choices=YES_NO)
+    elevators = models.PositiveSmallIntegerField("número de elevadores", null=True, blank=True)
+    built_area = models.DecimalField("área total edificada aproximada (m²)", max_digits=12, decimal_places=2, null=True, blank=True)
+    pool = models.BooleanField("piscina", default=False)
+    sauna = models.BooleanField("sauna", default=False)
+    courts = models.BooleanField("quadras polivalentes", default=False)
+    generators = models.BooleanField("geradores", default=False)
+    other = models.TextField("outros", blank=True)
+    lgpd_consent = models.BooleanField("consentimento LGPD", default=False)
+    source = models.CharField("origem", max_length=40, default="Landing Page")
+    client = models.ForeignKey(Client, null=True, blank=True, on_delete=models.SET_NULL, related_name="landing_leads")
+    opportunity = models.ForeignKey(Opportunity, null=True, blank=True, on_delete=models.SET_NULL, related_name="landing_leads")
+
+    def __str__(self):
+        return f"{self.legal_name} — {self.syndic_name}"
+
 class Proposal(Timestamped):
     STATUS = [("rascunho", "Rascunho"), ("enviada", "Enviada"), ("aceita", "Aceita"), ("recusada", "Recusada")]
     opportunity = models.ForeignKey(Opportunity, verbose_name="oportunidade", on_delete=models.CASCADE, related_name="proposals")

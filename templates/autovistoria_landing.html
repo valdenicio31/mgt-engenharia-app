@@ -1,0 +1,74 @@
+{% load static %}<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Solicite um orçamento de autovistoria predial com a MGT Engenharia.">
+  <title>Autovistoria Predial | MGT Engenharia</title>
+  <link rel="stylesheet" href="{% static 'css/autovistoria.css' %}">
+</head>
+<body>
+  <header class="site-header">
+    <a class="mgt-logo" href="#inicio" aria-label="MGT Engenharia">
+      <span class="m">M</span><span class="g">G</span><span class="t">T</span>
+      <span class="logo-copy"><b>ENGENHARIA</b><small>SOLUÇÕES PARA CONDOMÍNIOS</small></span>
+    </a>
+    <nav><a href="#beneficios">Benefícios</a><a href="#orcamento">Solicitar orçamento</a><a href="https://wa.me/5521975164643">WhatsApp</a></nav>
+  </header>
+
+  <main>
+    <section class="hero" id="inicio">
+      <div>
+        <span class="eyebrow">AUTOVISTORIA PREDIAL NO RIO DE JANEIRO</span>
+        <h1>Proteja o condomínio, as pessoas e o patrimônio.</h1>
+        <p>A MGT Engenharia realiza avaliação técnica para identificar riscos, orientar prioridades e apoiar síndicos e administradoras na conservação e regularização do edifício.</p>
+        <div class="hero-actions"><a class="primary" href="#orcamento">Solicitar orçamento</a><a class="secondary" href="https://wa.me/5521975164643">Falar pelo WhatsApp</a></div>
+        <ul><li>Diagnóstico técnico responsável</li><li>Planejamento claro das providências</li><li>Atendimento próximo ao síndico</li></ul>
+      </div>
+      <aside class="hero-card">
+        <strong>Seu prédio está preparado?</strong>
+        <p>Antecipe problemas estruturais, elétricos, hidráulicos e de segurança antes que se transformem em emergências ou despesas maiores.</p>
+        <span>Ética • Transparência • Segurança • Qualidade técnica</span>
+      </aside>
+    </section>
+
+    <section class="benefits" id="beneficios">
+      <article><b>01</b><h2>Prevenção</h2><p>Identificação antecipada de anomalias, falhas e riscos.</p></article>
+      <article><b>02</b><h2>Segurança</h2><p>Orientação técnica para proteger moradores, usuários e patrimônio.</p></article>
+      <article><b>03</b><h2>Planejamento</h2><p>Prioridades organizadas para apoiar decisões e investimentos.</p></article>
+      <article><b>04</b><h2>Conformidade</h2><p>Apoio técnico à documentação e às providências do condomínio.</p></article>
+    </section>
+
+    <section class="lead-section" id="orcamento">
+      <div class="lead-copy">
+        <span class="eyebrow">ORÇAMENTO DE AUTOVISTORIA</span>
+        <h2>Conte-nos sobre o condomínio</h2>
+        <p>Preencha as informações disponíveis. Nossa equipe avaliará as características do prédio e entrará em contato para dar continuidade ao atendimento.</p>
+        <div class="contact-box"><b>MGT Engenharia</b><span>WhatsApp: (21) 97516-4643</span><span>E-mail: mgtengenharia@ia.com.br</span><span>CNPJ: 10.652.916/0001-80</span></div>
+      </div>
+      <div class="form-card">
+        {% if submitted %}
+          <div class="success"><b>Solicitação recebida com sucesso!</b><p>O condomínio foi registrado e nossa equipe entrará em contato. Se desejar, fale conosco agora pelo WhatsApp.</p><a class="primary" href="{{ whatsapp_url }}">Continuar pelo WhatsApp</a></div>
+        {% endif %}
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+          <fieldset><legend>Responsável e condomínio</legend>
+            {% for field in form %}
+              {% if field.name == 'building_age' %}</fieldset><fieldset><legend>Características do prédio</legend>{% endif %}
+              {% if field.name == 'pool' %}<div class="amenities-title">Estruturas existentes</div>{% endif %}
+              <div class="form-field {% if field.field.widget.input_type == 'checkbox' %}check-field{% endif %} {% if field.name == 'address' or field.name == 'other' or field.name == 'lgpd_consent' %}wide{% endif %}">
+                {% if field.field.widget.input_type == 'checkbox' %}{{ field }} {{ field.label_tag }}{% else %}{{ field.label_tag }}{{ field }}{% endif %}
+                {% if field.errors %}<small class="field-error">{{ field.errors|striptags }}</small>{% endif %}
+              </div>
+            {% endfor %}
+          </fieldset>
+          <button type="submit">Enviar solicitação de orçamento</button>
+          <small class="privacy">Seus dados serão utilizados exclusivamente para atendimento comercial e elaboração do orçamento.</small>
+        </form>
+      </div>
+    </section>
+  </main>
+  <footer><span>MGT Engenharia — Autovistoria e soluções técnicas para condomínios</span><span>Criado por VIA IA Soluções @by VIA IA 2026</span></footer>
+</body>
+</html>

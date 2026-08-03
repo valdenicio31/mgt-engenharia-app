@@ -41,9 +41,10 @@ def _date(value):
         return None
     if isinstance(value, (date, datetime)):
         return value.date() if isinstance(value, datetime) else value
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+    text = str(value).strip()
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%Y-%m-%d %H:%M:%S"):
         try:
-            return datetime.strptime(str(value).strip(), fmt).date()
+            return datetime.strptime(text, fmt).date()
         except ValueError:
             pass
     raise ValueError(f"Data inválida: {value}")
@@ -87,7 +88,7 @@ def read_clients(upload):
         sheet = load_workbook(upload, read_only=True, data_only=True).active
         rows = sheet.iter_rows(values_only=True)
         headers = [str(value or "") for value in next(rows)]
-        return [dict(zip(headers, values)) for values in rows if any(value not in (None, "") for value in values)]
+        return (dict(zip(headers, values)) for values in rows if any(value not in (None, "") for value in values))
     raw = upload.read()
     if extension in {"csv", "txt"}:
         text = raw.decode("utf-8-sig")
@@ -96,41 +97,66 @@ def read_clients(upload):
             delimiter = csv.Sniffer().sniff(sample, delimiters=";,\t|").delimiter
         except csv.Error:
             delimiter = ";"
-        return list(csv.DictReader(io.StringIO(text), delimiter=delimiter))
+        return csv.DictReader(io.StringIO(text), delimiter=delimiter)
     if extension == "xml":
         root = ET.fromstring(raw)
         return [{child.tag: child.text or "" for child in record} for record in root.findall(".//registro")]
     raise ValueError("Formato não permitido. Use XLSX, CSV, TXT ou XML.")
 
 
-@transaction.atomic
 def import_clients(upload):
     created = updated = 0
     errors = []
+    clients = list(Client.objects.all())
+    by_notification = {
+        (_key(client.notification_number), _key(client.process_number)): client
+        for client in clients if client.notification_number and client.process_number
+    }
+    by_document = {
+        "".join(char for char in client.document if char.isdigit()): client
+        for client in clients if client.document and any(char.isdigit() for char in client.document)
+    }
+    by_address = {
+        (_key(client.name), _key(client.street), _key(client.address_number)): client
+        for client in clients if client.street
+    }
+    new_clients = []
+    changed_clients = {}
     for number, row in enumerate(read_clients(upload), start=2):
         try:
             data = _normalize(row)
             notification = data.get("notification_number", "")
             process = data.get("process_number", "")
-            match = Client.objects.filter(notification_number__iexact=notification, process_number__iexact=process).first() if notification and process else None
+            match = by_notification.get((_key(notification), _key(process))) if notification and process else None
             document = "".join(char for char in data.get("document", "") if char.isdigit())
             if not match and document:
-                match = next((client for client in Client.objects.exclude(document="") if "".join(char for char in client.document if char.isdigit()) == document), None)
+                match = by_document.get(document)
             if not match and data.get("street"):
-                match = Client.objects.filter(
-                    name__iexact=data["name"], street__iexact=data["street"],
-                    address_number__iexact=data.get("address_number", ""),
-                ).first()
+                match = by_address.get((_key(data["name"]), _key(data["street"]), _key(data.get("address_number", ""))))
             if match:
                 for field, value in data.items():
                     setattr(match, field, value)
-                match.save()
+                if match.pk:
+                    changed_clients[match.pk] = match
                 updated += 1
             else:
-                Client.objects.create(**data)
+                match = Client(**data)
+                new_clients.append(match)
                 created += 1
+            if notification and process:
+                by_notification[(_key(notification), _key(process))] = match
+            if document:
+                by_document[document] = match
+            if data.get("street"):
+                by_address[(_key(data["name"]), _key(data["street"]), _key(data.get("address_number", "")))] = match
         except Exception as exc:
             errors.append(f"Linha {number}: {exc}")
+    fields = [field for field, _ in COLUMNS]
+    with transaction.atomic():
+        if new_clients:
+            Client.objects.bulk_create(new_clients, batch_size=250)
+        if changed_clients:
+            Client.objects.bulk_update(list(changed_clients.values()), fields, batch_size=250)
     return created, updated, errors
 
 

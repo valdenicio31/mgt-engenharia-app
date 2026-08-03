@@ -4,7 +4,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.db import transaction
-from .models import Client, Opportunity, Project, Proposal, Task, UserProfile
+from .models import Client, LandingLead, Opportunity, Project, Proposal, Task, UserProfile
 
 class EmailCPFAuthenticationForm(AuthenticationForm):
     username = forms.CharField(label="E-mail ou CPF", widget=forms.TextInput(attrs={"autofocus": True, "autocomplete": "username"}))
@@ -133,6 +133,22 @@ class OpportunityForm(forms.ModelForm):
     class Meta:
         model = Opportunity
         fields = ("client", "title", "stage", "estimated_value")
+
+class LandingLeadForm(forms.ModelForm):
+    lgpd_consent = forms.BooleanField(
+        label="Autorizo a MGT Engenharia a utilizar estes dados para preparar o orçamento e entrar em contato.",
+        required=True,
+    )
+
+    class Meta:
+        model = LandingLead
+        exclude = ("source", "client", "opportunity")
+        widgets = {
+            "address": forms.TextInput(attrs={"placeholder": "Rua, número, complemento, bairro e cidade"}),
+            "postal_code": forms.TextInput(attrs={"placeholder": "00000-000"}),
+            "other": forms.Textarea(attrs={"rows": 3, "placeholder": "Informe outras características relevantes"}),
+            "built_area": forms.NumberInput(attrs={"min": 0, "step": "0.01"}),
+        }
 
 class ProposalForm(forms.ModelForm):
     class Meta:

@@ -3,6 +3,8 @@ from . import views
 
 urlpatterns = [
     path("health/", views.health, name="health"),
+    path("autovistoria/", views.autovistoria_landing, name="autovistoria_landing"),
+    path("apresentacao/", views.autovistoria_landing, name="presentation"),
     path("primeiro-acesso/", views.first_access, name="first_access"),
     path("meu-cadastro/", views.profile, name="profile"),
     path("", views.dashboard, name="dashboard"),
