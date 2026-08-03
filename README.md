@@ -11,17 +11,6 @@ Entrega da Fase 22 que consolida o protótipo homologado em uma aplicação Djan
 - campos e situações de projetos e tarefas traduzidos para português;
 - pesquisa do Diário Oficial por data inicial e final, limitada a 31 dias;
 - trilha de auditoria para inclusão, alteração e exclusão.
-- foto do usuário armazenada no PostgreSQL e exibida com segurança no Render;
-- exportação por registros selecionados ou por todos os registros;
-- carta comercial com valores, serviços, logotipo e envio por e-mail/WhatsApp;
-- Landing Page pública da MGT em `/apresentacao/`.
-- Landing Page com formulário que cria cliente e oportunidade automaticamente;
-- botões globais Voltar e Avançar;
-- carta assinada por Márcio Guimarães;
-- RAT do dia com cálculo de horas, alteração versionada, exclusão, auditoria e documento para impressão/PDF.
-- tarefas com data de execução, hora inicial/final, horas planejadas e percentual de conclusão;
-- RAT preenchida automaticamente pelas tarefas do dia;
-- rodapé da RAT com técnico, cliente, conclusão, planejado, executado, saldo e crédito VIA IA.
 
 ## Execução local
 

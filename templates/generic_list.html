@@ -3,17 +3,21 @@
 {% block content %}
 <section class="grid">
   <article class="panel">
-    <div class="records-heading"><h2>Registros</h2>{% url 'records_export' resource 'xlsx' as export_xlsx %}{% url 'records_export' resource 'csv' as export_csv %}{% url 'records_export' resource 'xml' as export_xml %}{% url 'records_export' resource 'txt' as export_txt %}{% include 'partials/export_controls.html' %}</div>
-    <table><thead><tr><th><label class="select-all"><input type="checkbox" data-select-all> Todos</label></th><th>Nome / identificação</th><th>Atualizado</th><th>Ações</th></tr></thead><tbody>
-    {% for item in items %}<tr><td><input type="checkbox" data-export-id value="{{ item.pk }}" aria-label="Selecionar {{ item }}"></td><td>{{ item }}</td><td>{{ item.updated_at|date:'d/m/Y H:i' }}</td><td class="row-actions">
+    <div class="records-heading"><h2>Registros</h2><details class="export-menu"><summary>Exportar</summary><div>
+      <a href="{% url 'records_export' resource 'xlsx' %}">Excel</a>
+      <a href="{% url 'records_export' resource 'csv' %}">CSV</a>
+      <a href="{% url 'records_export' resource 'xml' %}">XML</a>
+      <a href="{% url 'records_export' resource 'txt' %}">Texto</a>
+    </div></details></div>
+    <table><thead><tr><th>Nome / identificação</th><th>Atualizado</th><th>Ações</th></tr></thead><tbody>
+    {% for item in items %}<tr><td>{{ item }}</td><td>{{ item.updated_at|date:'d/m/Y H:i' }}</td><td class="row-actions">
       <a class="action-link" href="?editar={{ item.pk }}">Alterar</a>
       <form method="post" action="{% url 'record_delete' resource item.pk %}" onsubmit="return confirm('Confirma a exclusão deste registro?')">{% csrf_token %}<button class="danger-link" type="submit">Excluir</button></form>
-    </td></tr>{% empty %}<tr><td colspan="4">Nenhum registro.</td></tr>{% endfor %}
+    </td></tr>{% empty %}<tr><td colspan="3">Nenhum registro.</td></tr>{% endfor %}
     </tbody></table>
   </article>
   <article class="panel"><h2>{% if editing %}Alterar registro{% else %}Novo registro{% endif %}</h2>
     <form method="post" class="form">{% csrf_token %}{{ form.as_p }}<button>{% if editing %}Salvar alterações{% else %}Salvar{% endif %}</button>{% if editing %}<a class="secondary-button" href=".">Cancelar</a>{% endif %}</form>
   </article>
 </section>
-<script>document.querySelector('[data-select-all]')?.addEventListener('change', function(){this.closest('.panel').querySelectorAll('[data-export-id]').forEach(item => item.checked = this.checked);});</script>
 {% endblock %}

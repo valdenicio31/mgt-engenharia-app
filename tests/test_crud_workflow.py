@@ -41,21 +41,37 @@ class CrudWorkflowTests(TestCase):
         response = self.client.post(reverse("gazette_findings"), {"start_date": "2026-01-01", "end_date": "2026-03-01"}, follow=True)
         self.assertContains(response, "período válido de até 31 dias")
 
-    def test_export_can_limit_records_or_include_all(self):
-        other = Client.objects.create(name="Outro Condomínio")
-        selected = self.client.get(reverse("clients_export", args=("csv",)) + f"?ids={self.condominium.pk}")
-        text = selected.content.decode("utf-8-sig")
-        self.assertIn("Condomínio Teste", text)
-        self.assertNotIn("Outro Condomínio", text)
-        all_records = self.client.get(reverse("clients_export", args=("csv",)))
-        self.assertIn("Outro Condomínio", all_records.content.decode("utf-8-sig"))
+    def test_selected_clients_are_converted_to_opportunities_with_automatic_title(self):
+        second = Client.objects.create(name="Condomínio Segundo")
+        response = self.client.post(
+            reverse("clients_to_opportunities"),
+            {"client_ids": [self.condominium.pk, second.pk]},
+            follow=True,
+        )
+        self.assertContains(response, "2 oportunidade(s) criada(s) com sucesso")
+        self.assertTrue(Opportunity.objects.filter(
+            client=self.condominium,
+            title="Autovistoria — Condomínio Teste",
+            stage="lead",
+            owner=self.user,
+        ).exists())
+        self.assertTrue(Opportunity.objects.filter(
+            client=second,
+            title="Autovistoria — Condomínio Segundo",
+        ).exists())
 
-    def test_public_landing_page_and_commercial_letter(self):
-        landing = self.client.get(reverse("landing_page"))
-        self.assertEqual(landing.status_code, 200)
-        self.assertContains(landing, "Nossos valores")
-        opportunity = Opportunity.objects.create(client=self.condominium, title="Manutenção predial", owner=self.user)
-        letter = self.client.get(reverse("opportunity_letter", args=(opportunity.pk,)))
-        self.assertContains(letter, "Enviar por e-mail")
-        self.assertContains(letter, "Enviar por WhatsApp")
-        self.assertContains(letter, "ética, transparência")
+    def test_bulk_conversion_does_not_duplicate_existing_opportunity(self):
+        title = "Autovistoria — Condomínio Teste"
+        Opportunity.objects.create(client=self.condominium, title=title, owner=self.user)
+        response = self.client.post(
+            reverse("clients_to_opportunities"),
+            {"client_ids": [self.condominium.pk]},
+            follow=True,
+        )
+        self.assertContains(response, "1 registro(s) foram ignorados")
+        self.assertEqual(Opportunity.objects.filter(client=self.condominium, title=title).count(), 1)
+
+    def test_bulk_conversion_requires_selection(self):
+        response = self.client.post(reverse("clients_to_opportunities"), follow=True)
+        self.assertContains(response, "Selecione pelo menos um condomínio")
+        self.assertEqual(Opportunity.objects.count(), 0)

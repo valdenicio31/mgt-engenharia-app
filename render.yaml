@@ -21,7 +21,3 @@ services:
         value: .onrender.com,homologacao-mgt.viaiasolucoes.com
       - key: CSRF_TRUSTED_ORIGINS
         value: https://homologacao-mgt.viaiasolucoes.com
-      - key: MGT_CONTACT_EMAIL
-        sync: false
-      - key: MGT_WHATSAPP
-        sync: false

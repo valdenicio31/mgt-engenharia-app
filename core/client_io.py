@@ -134,9 +134,9 @@ def import_clients(upload):
     return created, updated, errors
 
 
-def _rows(queryset=None):
+def _rows():
     yield [label for _, label in COLUMNS]
-    for client in (queryset if queryset is not None else Client.objects.all()).order_by("name"):
+    for client in Client.objects.all().order_by("name"):
         values = []
         for field, _ in COLUMNS:
             value = getattr(client, field)
@@ -148,8 +148,8 @@ def _rows(queryset=None):
         yield values
 
 
-def export_clients(fmt, queryset=None):
-    rows = list(_rows(queryset))
+def export_clients(fmt):
+    rows = list(_rows())
     if fmt == "xlsx":
         workbook = Workbook()
         sheet = workbook.active

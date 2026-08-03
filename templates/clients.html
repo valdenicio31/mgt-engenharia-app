@@ -5,20 +5,26 @@
   <article class="panel clients-list">
     <div class="records-heading"><div><h2>Registros</h2><small>Importe ou exporte a base de condomínios.</small></div>
       <div class="data-actions">
+        <form id="bulk-opportunities-form" action="{% url 'clients_to_opportunities' %}" method="post" onsubmit="return confirm('Transformar os condomínios selecionados em oportunidades de autovistoria?')">
+          {% csrf_token %}<button type="submit" class="bulk-opportunity-button">Criar oportunidades</button>
+        </form>
         <form action="{% url 'clients_import' %}" method="post" enctype="multipart/form-data" class="import-form">{% csrf_token %}
           <label class="file-button">Importar arquivo<input type="file" name="file" accept=".xlsx,.csv,.txt,.xml" required onchange="this.form.submit()"></label>
         </form>
-        {% url 'clients_export' 'xlsx' as export_xlsx %}{% url 'clients_export' 'csv' as export_csv %}{% url 'clients_export' 'xml' as export_xml %}{% url 'clients_export' 'txt' as export_txt %}{% include 'partials/export_controls.html' %}
+        <details class="export-menu"><summary>Exportar</summary><div>
+          <a href="{% url 'clients_export' 'xlsx' %}">Excel (.xlsx)</a><a href="{% url 'clients_export' 'csv' %}">CSV (.csv)</a>
+          <a href="{% url 'clients_export' 'txt' %}">Texto (.txt)</a><a href="{% url 'clients_export' 'xml' %}">XML (.xml)</a>
+        </div></details>
       </div>
     </div>
     <p class="import-help">Formatos aceitos: Excel, CSV, TXT e XML — limite de 5 MB.</p>
     <div class="table-scroll">
       <table>
-        <thead><tr><th><label class="select-all"><input type="checkbox" data-select-all> Todos</label></th><th>Condomínio</th><th>Processo</th><th>Notificação</th><th>Validação</th><th>Atualizado</th><th>Ações</th></tr></thead>
+        <thead><tr><th class="select-column"><input type="checkbox" id="select-all-clients" aria-label="Selecionar todos os condomínios"></th><th>Condomínio</th><th>Processo</th><th>Notificação</th><th>Validação</th><th>Atualizado</th><th>Ações</th></tr></thead>
         <tbody>
         {% for item in items %}
           <tr>
-            <td><input type="checkbox" data-export-id value="{{ item.pk }}" aria-label="Selecionar {{ item.name }}"></td>
+            <td class="select-column"><input class="client-selector" type="checkbox" name="client_ids" value="{{ item.pk }}" form="bulk-opportunities-form" aria-label="Selecionar {{ item.name }}"></td>
             <td><strong>{{ item.name }}</strong><small>{{ item.street }}{% if item.address_number %}, {{ item.address_number }}{% endif %}{% if item.neighborhood %} — {{ item.neighborhood }}{% endif %}</small></td>
             <td>{{ item.process_number|default:"—" }}</td>
             <td>{{ item.notification_number|default:"—" }}</td>
@@ -70,5 +76,21 @@
     </form>
   </article>
 </section>
-<script>document.querySelector('[data-select-all]')?.addEventListener('change', function(){this.closest('.panel').querySelectorAll('[data-export-id]').forEach(item => item.checked = this.checked);});</script>
+<script>
+  (() => {
+    const selectAll = document.getElementById('select-all-clients');
+    const selectors = [...document.querySelectorAll('.client-selector')];
+    if (!selectAll) return;
+    const refresh = () => {
+      const selected = selectors.filter((item) => item.checked).length;
+      selectAll.checked = selectors.length > 0 && selected === selectors.length;
+      selectAll.indeterminate = selected > 0 && selected < selectors.length;
+    };
+    selectAll.addEventListener('change', () => {
+      selectors.forEach((item) => { item.checked = selectAll.checked; });
+      refresh();
+    });
+    selectors.forEach((item) => item.addEventListener('change', refresh));
+  })();
+</script>
 {% endblock %}

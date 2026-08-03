@@ -1,22 +1,20 @@
 from django.contrib import messages
 from django.contrib.auth import login
-from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
-from django.db import connection
+from django.db import connection, transaction
 import csv
 import io
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from urllib.parse import quote
 from openpyxl import Workbook
-from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
-from .forms import ClientForm, FirstAccessForm, LandingContactForm, OpportunityForm, ProjectForm, ProposalForm, RATForm, TaskForm, UserProfileForm
+from .forms import ClientForm, FirstAccessForm, OpportunityForm, ProjectForm, ProposalForm, TaskForm, UserProfileForm
 from .client_io import export_clients, import_clients
 from .gazette import fetch_notifications
-from .models import AuditLog, Client, GazetteFinding, Opportunity, Project, Proposal, RAT, RATRevision, Task
+from .models import AuditLog, Client, GazetteFinding, Opportunity, Project, Proposal, RAT, Task
 from .models import UserProfile
 
 def health(request):
@@ -24,25 +22,6 @@ def health(request):
         cursor.execute("SELECT 1")
         cursor.fetchone()
     return JsonResponse({"status": "ok", "service": "mgt-engenharia"})
-
-def landing_page(request):
-    form = LandingContactForm(request.POST or None)
-    sent = False
-    if request.method == "POST" and form.is_valid():
-        data = form.cleaned_data
-        client, _ = Client.objects.get_or_create(
-            email__iexact=data["email"],
-            defaults={"name": data["condominium"], "email": data["email"], "phone": data["phone"], "action_description": f"Contato: {data['name']} — origem: Landing Page"},
-        )
-        if not client.phone:
-            client.phone = data["phone"]; client.save(update_fields=("phone", "updated_at"))
-        owner = get_user_model().objects.filter(is_superuser=True).first() or get_user_model().objects.first()
-        if owner:
-            Opportunity.objects.create(client=client, title=data["service"], owner=owner, source="landing_page")
-            AuditLog.objects.create(actor=None, action="lead_landing_page", entity="Opportunity", entity_id=str(client.pk), details={"contato": data["name"], "consentimento": True})
-            sent = True
-            form = LandingContactForm()
-    return render(request, "landing_page.html", {"contact_email": settings.MGT_CONTACT_EMAIL, "whatsapp": settings.MGT_WHATSAPP, "form": form, "sent": sent})
 
 def first_access(request):
     if request.user.is_authenticated:
@@ -78,16 +57,6 @@ def profile(request):
         return redirect("profile")
     return render(request, "profile.html", {"form": form, "profile": profile_obj})
 
-@login_required
-def profile_photo(request):
-    profile_obj = get_object_or_404(UserProfile, user=request.user)
-    if not profile_obj.photo_data:
-        return HttpResponse(status=404)
-    response = HttpResponse(bytes(profile_obj.photo_data), content_type=profile_obj.photo_content_type or "image/jpeg")
-    response["Cache-Control"] = "private, no-store"
-    response["X-Content-Type-Options"] = "nosniff"
-    return response
-
 def _crud(request, model, form_class, title, template="generic_list.html"):
     edit_id = request.GET.get("editar")
     instance = get_object_or_404(model, pk=edit_id) if edit_id else None
@@ -108,7 +77,56 @@ def _crud(request, model, form_class, title, template="generic_list.html"):
 @login_required
 def clients(request): return _crud(request, Client, ClientForm, "Clientes e condomínios", "clients.html")
 
-CRUD_MODELS = {"clientes": Client, "oportunidades": Opportunity, "propostas": Proposal, "projetos": Project, "tarefas": Task, "rats": RAT}
+
+def _automatic_opportunity_title(client):
+    return f"Autovistoria — {client.name}"
+
+
+@login_required
+@require_POST
+def clients_to_opportunities(request):
+    selected_ids = list(dict.fromkeys(request.POST.getlist("client_ids")))
+    if not selected_ids:
+        messages.warning(request, "Selecione pelo menos um condomínio para transformar em oportunidade.")
+        return redirect("clients")
+
+    clients_by_id = {
+        str(client.pk): client
+        for client in Client.objects.filter(pk__in=selected_ids, active=True)
+    }
+    created = skipped = 0
+    created_ids = []
+    with transaction.atomic():
+        for client_id in selected_ids:
+            client = clients_by_id.get(client_id)
+            if not client:
+                skipped += 1
+                continue
+            opportunity, was_created = Opportunity.objects.get_or_create(
+                client=client,
+                title=_automatic_opportunity_title(client),
+                defaults={"stage": "lead", "estimated_value": 0, "owner": request.user},
+            )
+            if was_created:
+                created += 1
+                created_ids.append(opportunity.pk)
+            else:
+                skipped += 1
+
+        AuditLog.objects.create(
+            actor=request.user,
+            action="clientes_para_oportunidades",
+            entity="Opportunity",
+            entity_id=",".join(str(pk) for pk in created_ids) or "nenhuma",
+            details={"selecionados": len(selected_ids), "criados": created, "ignorados": skipped},
+        )
+
+    messages.success(request, f"{created} oportunidade(s) criada(s) com sucesso.")
+    if skipped:
+        messages.info(request, f"{skipped} registro(s) foram ignorados por já existirem ou estarem inativos.")
+    return redirect("opportunities" if created else "clients")
+
+CRUD_MODELS = {"clientes": Client, "oportunidades": Opportunity, "propostas": Proposal, "projetos": Project, "tarefas": Task}
 
 @login_required
 @require_POST
@@ -126,11 +144,11 @@ def record_delete(request, resource, pk):
         messages.error(request, "Este registro está relacionado a outros dados e não pode ser excluído.")
     return redirect(f"/{resource}/")
 
-def _generic_export(model, fmt, queryset=None):
+def _generic_export(model, fmt):
     fields = [f for f in model._meta.fields if f.name not in {"id", "created_at", "updated_at"}]
     headers = [str(f.verbose_name).title() for f in fields]
     rows = []
-    for obj in (queryset if queryset is not None else model.objects.all()):
+    for obj in model.objects.all():
         values = []
         for field in fields:
             display = getattr(obj, f"get_{field.name}_display", None)
@@ -158,11 +176,7 @@ def _generic_export(model, fmt, queryset=None):
 def records_export(request, resource, fmt):
     model = CRUD_MODELS.get(resource)
     if not model or fmt not in {"xlsx", "csv", "txt", "xml"}: return HttpResponse("Exportação inválida.", status=400)
-    queryset = model.objects.all()
-    ids = request.GET.get("ids", "").strip()
-    if ids:
-        queryset = queryset.filter(pk__in=[value for value in ids.split(",") if value.isdigit()])
-    content, content_type = _generic_export(model, fmt, queryset)
+    content, content_type = _generic_export(model, fmt)
     response = HttpResponse(content, content_type=content_type)
     response["Content-Disposition"] = f'attachment; filename="MGT_{resource}.{fmt}"'
     return response
@@ -188,12 +202,8 @@ def clients_import(request):
 
 @login_required
 def clients_export(request, fmt):
-    queryset = Client.objects.all()
-    ids = request.GET.get("ids", "").strip()
-    if ids:
-        queryset = queryset.filter(pk__in=[value for value in ids.split(",") if value.isdigit()])
     try:
-        content, content_type = export_clients(fmt.lower(), queryset)
+        content, content_type = export_clients(fmt.lower())
     except ValueError as exc:
         return HttpResponse(str(exc), status=400)
     filename = f"MGT_Engenharia_Condominios.{fmt.lower()}"
@@ -215,41 +225,9 @@ def tasks(request): return _crud(request, Task, TaskForm, "Tarefas")
 @login_required
 def proposals(request): return _crud(request, Proposal, ProposalForm, "Propostas")
 
-def _rat_snapshot(rat):
-    return {"project": str(rat.project), "service_date": rat.service_date.isoformat(), "start_time": str(rat.start_time or ""), "end_time": str(rat.end_time or ""), "total_hours": str(rat.total_hours), "description": rat.description, "notes": rat.notes, "next_steps": rat.next_steps, "status": rat.status, "approved_by_client": rat.approved_by_client}
-
 @login_required
 def rats(request):
-    edit_id = request.GET.get("editar")
-    instance = get_object_or_404(RAT, pk=edit_id) if edit_id else None
-    original_snapshot = _rat_snapshot(instance) if instance else None
-    initial = {"service_date": datetime.now().date(), "status": "rascunho"}
-    if request.GET.get("gerar") == "hoje" and request.GET.get("projeto"):
-        project = get_object_or_404(Project, pk=request.GET["projeto"])
-        tasks = list(project.tasks.filter(execution_date=datetime.now().date()).order_by("start_time"))
-        starts = [task.start_time for task in tasks if task.start_time]
-        ends = [task.end_time for task in tasks if task.end_time]
-        initial.update({"project": project, "start_time": min(starts) if starts else None, "end_time": max(ends) if ends else None, "description": "\n".join(f"• {task.title} — {task.progress}% concluída ({task.executed_hours}h)" for task in tasks) or "Atividades realizadas no atendimento do dia."})
-    form = RATForm(request.POST or None, instance=instance, initial=initial if not instance else None)
-    if request.method == "POST" and form.is_valid():
-        rat = form.save(commit=False); rat.technician = instance.technician if instance else request.user
-        if instance:
-            RATRevision.objects.create(rat=instance, version=instance.version, snapshot=original_snapshot, changed_by=request.user)
-            rat.version += 1
-        rat.save()
-        AuditLog.objects.create(actor=request.user, action="rat_alterada" if instance else "rat_gerada", entity="RAT", entity_id=str(rat.pk), details={"versao": rat.version})
-        messages.success(request, "RAT atualizada com nova versão." if instance else "RAT do dia gerada com sucesso.")
-        return redirect("rats")
-    return render(request, "rats.html", {"title": "RAT — Relatórios de Atendimento", "items": RAT.objects.select_related("project", "technician").order_by("-service_date", "-created_at")[:100], "form": form, "editing": instance, "projects": Project.objects.all()})
-
-@login_required
-def rat_document(request, pk):
-    rat = get_object_or_404(RAT.objects.select_related("project__client", "technician"), pk=pk)
-    tasks = list(rat.project.tasks.all())
-    planned = round(sum(float(task.planned_hours or 0) for task in tasks), 2)
-    executed = round(sum(float(task.executed_hours or 0) for task in tasks), 2)
-    remaining = round(max(0, planned - executed), 2)
-    return render(request, "rat_document.html", {"rat": rat, "planned_hours": planned, "executed_hours": executed, "remaining_hours": remaining})
+    return render(request, "simple_list.html", {"title": "RAT — Relatórios de Atendimento", "items": RAT.objects.select_related("project")[:50]})
 
 @login_required
 def gazette_findings(request):

@@ -11,8 +11,6 @@ class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")
     cpf = models.CharField("CPF", max_length=11, unique=True)
     photo = models.ImageField("foto", upload_to="profiles/", blank=True)
-    photo_data = models.BinaryField("conteúdo da foto", null=True, blank=True, editable=False)
-    photo_content_type = models.CharField("tipo da foto", max_length=50, blank=True, editable=False)
     phone = models.CharField("telefone", max_length=30, blank=True)
     birth_date = models.DateField("data de nascimento", null=True, blank=True)
     street = models.CharField("rua/logradouro", max_length=180, blank=True)
@@ -85,7 +83,6 @@ class Opportunity(Timestamped):
     stage = models.CharField("etapa", max_length=20, choices=STAGES, default="lead")
     estimated_value = models.DecimalField("valor estimado", max_digits=12, decimal_places=2, default=0)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="responsável", on_delete=models.PROTECT)
-    source = models.CharField("origem", max_length=30, choices=(("manual", "Cadastro manual"), ("landing_page", "Landing Page"), ("diario_oficial", "Diário Oficial")), default="manual")
     def __str__(self): return self.title
 
 class Proposal(Timestamped):
@@ -111,64 +108,15 @@ class Task(Timestamped):
     title = models.CharField("tarefa", max_length=180)
     assignee = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="responsável", on_delete=models.PROTECT)
     due_date = models.DateField("prazo", null=True, blank=True)
-    execution_date = models.DateField("data de execução", null=True, blank=True)
-    start_time = models.TimeField("hora inicial", null=True, blank=True)
-    end_time = models.TimeField("hora final", null=True, blank=True)
-    planned_hours = models.DecimalField("horas planejadas", max_digits=5, decimal_places=2, default=0)
-    progress = models.PositiveSmallIntegerField("conclusão (%)", default=0)
     completed = models.BooleanField("concluída", default=False)
-
-    @property
-    def executed_hours(self):
-        if not self.execution_date or not self.start_time or not self.end_time:
-            return 0
-        from datetime import datetime
-        start = datetime.combine(self.execution_date, self.start_time)
-        end = datetime.combine(self.execution_date, self.end_time)
-        return round(max(0, (end - start).total_seconds() / 3600), 2)
-
-    def save(self, *args, **kwargs):
-        if self.completed:
-            self.progress = 100
-        self.progress = min(100, max(0, self.progress))
-        super().save(*args, **kwargs)
-        average = self.project.tasks.aggregate(value=models.Avg("progress"))["value"] or 0
-        Project.objects.filter(pk=self.project_id).update(progress=round(average))
     def __str__(self): return self.title
 
 class RAT(Timestamped):
-    STATUS = (("rascunho", "Rascunho"), ("gerada", "Gerada"), ("enviada", "Enviada"), ("aprovada", "Aprovada"), ("cancelada", "Cancelada"))
     project = models.ForeignKey(Project, on_delete=models.PROTECT, related_name="rats")
-    service_date = models.DateField("data do atendimento")
-    start_time = models.TimeField("hora inicial", null=True, blank=True)
-    end_time = models.TimeField("hora final", null=True, blank=True)
-    total_hours = models.DecimalField("total de horas", max_digits=5, decimal_places=2, default=0)
-    description = models.TextField("atividades executadas")
-    notes = models.TextField("observações", blank=True)
-    next_steps = models.TextField("próximos passos", blank=True)
+    service_date = models.DateField()
+    description = models.TextField()
     technician = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
-    approved_by_client = models.BooleanField("aprovada pelo cliente", default=False)
-    status = models.CharField("situação", max_length=20, choices=STATUS, default="rascunho")
-    version = models.PositiveIntegerField("versão", default=1)
-
-    def save(self, *args, **kwargs):
-        if self.start_time and self.end_time:
-            from datetime import datetime
-            start = datetime.combine(self.service_date, self.start_time)
-            end = datetime.combine(self.service_date, self.end_time)
-            if end >= start:
-                self.total_hours = round((end - start).total_seconds() / 3600, 2)
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        return f"RAT {self.service_date:%d/%m/%Y} — {self.project} — v{self.version}"
-
-class RATRevision(models.Model):
-    rat = models.ForeignKey(RAT, on_delete=models.CASCADE, related_name="revisions")
-    version = models.PositiveIntegerField()
-    snapshot = models.JSONField(default=dict)
-    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
-    created_at = models.DateTimeField(auto_now_add=True)
+    approved_by_client = models.BooleanField(default=False)
 
 class AuditLog(models.Model):
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)

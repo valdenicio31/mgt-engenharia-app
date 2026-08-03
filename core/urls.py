@@ -3,13 +3,12 @@ from . import views
 
 urlpatterns = [
     path("health/", views.health, name="health"),
-    path("apresentacao/", views.landing_page, name="landing_page"),
     path("primeiro-acesso/", views.first_access, name="first_access"),
     path("meu-cadastro/", views.profile, name="profile"),
-    path("meu-cadastro/foto/", views.profile_photo, name="profile_photo"),
     path("", views.dashboard, name="dashboard"),
     path("clientes/", views.clients, name="clients"),
     path("clientes/importar/", views.clients_import, name="clients_import"),
+    path("clientes/transformar-em-oportunidades/", views.clients_to_opportunities, name="clients_to_opportunities"),
     path("clientes/exportar/<str:fmt>/", views.clients_export, name="clients_export"),
     path("<str:resource>/exportar/<str:fmt>/", views.records_export, name="records_export"),
     path("<str:resource>/<int:pk>/excluir/", views.record_delete, name="record_delete"),
@@ -19,6 +18,5 @@ urlpatterns = [
     path("projetos/", views.projects, name="projects"),
     path("tarefas/", views.tasks, name="tasks"),
     path("rats/", views.rats, name="rats"),
-    path("rats/<int:pk>/documento/", views.rat_document, name="rat_document"),
     path("diario-oficial/", views.gazette_findings, name="gazette_findings"),
 ]

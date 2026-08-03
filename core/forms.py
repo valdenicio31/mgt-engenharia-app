@@ -4,7 +4,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.db import transaction
-from .models import Client, Opportunity, Project, Proposal, RAT, Task, UserProfile
+from .models import Client, Opportunity, Project, Proposal, Task, UserProfile
 
 class EmailCPFAuthenticationForm(AuthenticationForm):
     username = forms.CharField(label="E-mail ou CPF", widget=forms.TextInput(attrs={"autofocus": True, "autocomplete": "username"}))
@@ -116,14 +116,6 @@ class UserProfileForm(forms.ModelForm):
         photo = self.cleaned_data.get("photo")
         if photo and getattr(photo, "size", 0) > 3 * 1024 * 1024:
             raise forms.ValidationError("A foto deve ter no máximo 3 MB.")
-        if photo:
-            allowed = {"image/jpeg", "image/png", "image/webp"}
-            content_type = getattr(photo, "content_type", "")
-            if content_type not in allowed:
-                raise forms.ValidationError("Use uma imagem JPG, PNG ou WEBP.")
-            self._photo_bytes = photo.read()
-            self._photo_content_type = content_type
-            photo.seek(0)
         return photo
 
     @transaction.atomic
@@ -132,14 +124,6 @@ class UserProfileForm(forms.ModelForm):
         self.user.first_name = self.cleaned_data["first_name"].strip()
         self.user.last_name = self.cleaned_data["last_name"].strip()
         self.user.email = self.cleaned_data["email"]
-        if hasattr(self, "_photo_bytes"):
-            profile.photo_data = self._photo_bytes
-            profile.photo_content_type = self._photo_content_type
-            profile.photo = ""
-        elif self.cleaned_data.get("photo") is False:
-            profile.photo_data = None
-            profile.photo_content_type = ""
-            profile.photo = ""
         if commit:
             self.user.save()
             profile.save()
@@ -149,14 +133,6 @@ class OpportunityForm(forms.ModelForm):
     class Meta:
         model = Opportunity
         fields = ("client", "title", "stage", "estimated_value")
-
-class LandingContactForm(forms.Form):
-    name = forms.CharField(label="Nome", max_length=160)
-    condominium = forms.CharField(label="Condomínio", max_length=160)
-    email = forms.EmailField(label="E-mail")
-    phone = forms.CharField(label="WhatsApp", max_length=30)
-    service = forms.CharField(label="Serviço de interesse", max_length=180)
-    consent = forms.BooleanField(label="Autorizo o contato da MGT Engenharia e o tratamento destes dados para atendimento.")
 
 class ProposalForm(forms.ModelForm):
     class Meta:
@@ -172,22 +148,5 @@ class ProjectForm(forms.ModelForm):
 class TaskForm(forms.ModelForm):
     class Meta:
         model = Task
-        fields = ("project", "title", "due_date", "execution_date", "start_time", "end_time", "planned_hours", "progress", "completed")
-        widgets = {"due_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"), "execution_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"), "start_time": forms.TimeInput(attrs={"type": "time"}), "end_time": forms.TimeInput(attrs={"type": "time"})}
-
-    def clean(self):
-        cleaned = super().clean()
-        start, end = cleaned.get("start_time"), cleaned.get("end_time")
-        if start and end and end <= start:
-            self.add_error("end_time", "A hora final deve ser posterior à hora inicial.")
-        return cleaned
-
-class RATForm(forms.ModelForm):
-    class Meta:
-        model = RAT
-        fields = ("project", "service_date", "start_time", "end_time", "description", "notes", "next_steps", "status", "approved_by_client")
-        widgets = {
-            "service_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
-            "start_time": forms.TimeInput(attrs={"type": "time"}), "end_time": forms.TimeInput(attrs={"type": "time"}),
-            "description": forms.Textarea(attrs={"rows": 7}), "notes": forms.Textarea(attrs={"rows": 3}), "next_steps": forms.Textarea(attrs={"rows": 3}),
-        }
+        fields = ("project", "title", "due_date", "completed")
+        widgets = {"due_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")}
