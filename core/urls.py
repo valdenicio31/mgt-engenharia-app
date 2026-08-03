@@ -10,6 +10,7 @@ urlpatterns = [
     path("", views.dashboard, name="dashboard"),
     path("clientes/", views.clients, name="clients"),
     path("clientes/importar/", views.clients_import, name="clients_import"),
+    path("clientes/<int:pk>/consultar-autovistoria/", views.client_autovistoria, name="client_autovistoria"),
     path("clientes/transformar-em-oportunidades/", views.clients_to_opportunities, name="clients_to_opportunities"),
     path("clientes/exportar/<str:fmt>/", views.clients_export, name="clients_export"),
     path("<str:resource>/exportar/<str:fmt>/", views.records_export, name="records_export"),

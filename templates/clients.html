@@ -38,7 +38,7 @@
             <td>{{ item.notification_number|default:"—" }}</td>
             <td><span class="status status-{{ item.validation }}">{{ item.get_validation_display }}</span></td>
             <td>{{ item.updated_at|date:'d/m/Y H:i' }}</td>
-            <td class="row-actions"><a class="action-link" href="?editar={{ item.pk }}">✏️ Alterar</a><form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">🗑️ Excluir</button></form></td>
+            <td class="row-actions"><a class="action-link" href="{% url 'client_autovistoria' item.pk %}">🔎 Autovistoria</a><a class="action-link" href="?editar={{ item.pk }}">✏️ Alterar</a><form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">🗑️ Excluir</button></form></td>
           </tr>
         {% empty %}<tr><td colspan="8">Nenhum registro.</td></tr>{% endfor %}
         </tbody>

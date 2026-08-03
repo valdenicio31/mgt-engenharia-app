@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="grid autovistoria-workflow">
+  <article class="panel">
+    <h2>🔎 Consulta de Autovistoria</h2>
+    <p>Use os dados do condomínio abaixo no portal da Prefeitura. O código de segurança deve ser digitado manualmente no portal.</p>
+
+    <div class="consultation-card" id="consultation-data"
+         data-street="{{ client.street|escape }}"
+         data-number="{{ client.address_number|escape }}"
+         data-complement="{{ client.complement|escape }}"
+         data-neighborhood="{{ client.neighborhood|escape }}"
+         data-communication="{{ client.notification_number|escape }}">
+      <h3>{{ client.name }}</h3>
+      <dl>
+        <dt>Logradouro</dt><dd>{{ client.street|default:'Não informado' }}</dd>
+        <dt>Número</dt><dd>{{ client.address_number|default:'Não informado' }}</dd>
+        <dt>Complemento</dt><dd>{{ client.complement|default:'—' }}</dd>
+        <dt>Bairro</dt><dd>{{ client.neighborhood|default:'Não informado' }}</dd>
+        <dt>Comunicado</dt><dd>{{ client.notification_number|default:'—' }}</dd>
+      </dl>
+    </div>
+
+    <div class="form-actions">
+      <button type="button" id="copy-consultation">📋 Copiar dados</button>
+      <a class="secondary-button" id="open-autovistoria" target="_blank" rel="noopener" href="{{ portal_url }}">🌐 Abrir portal da Prefeitura</a>
+      <a class="secondary-button" href="{% url 'clients' %}">← Voltar aos clientes</a>
+    </div>
+    <p id="copy-feedback" class="import-help" aria-live="polite"></p>
+
+    <details>
+      <summary>Como fazer a consulta</summary>
+      <ol>
+        <li>Clique em <strong>Copiar dados</strong>.</li>
+        <li>Abra o portal da Prefeitura.</li>
+        <li>Preencha logradouro, número, complemento, bairro e comunicado.</li>
+        <li>Digite o código de segurança exibido no portal e consulte.</li>
+        <li>Volte ao MGT e registre o resultado ao lado.</li>
+      </ol>
+    </details>
+  </article>
+
+  <article class="panel">
+    <h2>🎯 Registrar oportunidade</h2>
+    <p>Informe o resultado exibido pela Prefeitura. O MGT evita duplicidade pelo cliente e número do comunicado.</p>
+    <form method="post" class="form">{% csrf_token %}
+      {{ form.as_p }}
+      <div class="form-actions">
+        <button type="submit">💾 Salvar resultado e criar oportunidade</button>
+      </div>
+    </form>
+  </article>
+</section>
+<script>
+(() => {
+  const card = document.getElementById('consultation-data');
+  const copyButton = document.getElementById('copy-consultation');
+  const feedback = document.getElementById('copy-feedback');
+  if (!card || !copyButton) return;
+  const lines = [
+    `Logradouro: ${card.dataset.street || ''}`,
+    `Número: ${card.dataset.number || ''}`,
+    `Complemento: ${card.dataset.complement || ''}`,
+    `Bairro: ${card.dataset.neighborhood || ''}`,
+    `Número do comunicado: ${card.dataset.communication || ''}`
+  ];
+  copyButton.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      feedback.textContent = 'Dados copiados. Abra o portal e cole cada informação no campo correspondente.';
+    } catch (error) {
+      feedback.textContent = lines.join(' | ');
+    }
+  });
+})();
+</script>
+{% endblock %}

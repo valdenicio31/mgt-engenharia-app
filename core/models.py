@@ -84,6 +84,13 @@ class Opportunity(Timestamped):
     stage = models.CharField("etapa", max_length=20, choices=STAGES, default="lead")
     estimated_value = models.DecimalField("valor estimado", max_digits=12, decimal_places=2, default=0)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="responsável", on_delete=models.PROTECT)
+    source = models.CharField("origem", max_length=60, blank=True)
+    communication_number = models.CharField("número do comunicado", max_length=50, blank=True)
+    consultation_status = models.CharField("situação consultada", max_length=180, blank=True)
+    consultation_notes = models.TextField("observações da consulta", blank=True)
+    consultation_address = models.CharField("endereço consultado", max_length=300, blank=True)
+    source_url = models.URLField("link da consulta", max_length=500, blank=True)
+    consulted_at = models.DateTimeField("consultado em", null=True, blank=True)
     def __str__(self): return self.title
 
 class LandingLead(Timestamped):

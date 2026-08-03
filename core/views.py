@@ -10,12 +10,13 @@ import csv
 import io
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
+from django.utils import timezone
 from urllib.parse import quote
 from openpyxl import Workbook
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
-from .forms import ClientForm, FirstAccessForm, LandingLeadForm, OpportunityForm, ProjectForm, ProposalForm, TaskForm, UserProfileForm
+from .forms import AutovistoriaResultForm, ClientForm, FirstAccessForm, LandingLeadForm, OpportunityForm, ProjectForm, ProposalForm, TaskForm, UserProfileForm
 from .client_io import export_clients, import_clients
 from .gazette import fetch_notifications
 from .models import AuditLog, Client, GazetteFinding, LandingLead, Opportunity, Project, Proposal, RAT, Task
@@ -173,6 +174,51 @@ def _crud(request, model, form_class, title, template="generic_list.html"):
 
 @login_required
 def clients(request): return _crud(request, Client, ClientForm, "Clientes e condomínios", "clients.html")
+
+
+def _client_consultation_address(client):
+    first_line = ", ".join(part for part in [client.street, client.address_number] if part)
+    if client.complement:
+        first_line = f"{first_line} - {client.complement}" if first_line else client.complement
+    locality = " - ".join(part for part in [client.neighborhood, client.city, client.state] if part)
+    return " | ".join(part for part in [first_line, locality] if part)
+
+
+@login_required
+def client_autovistoria(request, pk):
+    client = get_object_or_404(Client, pk=pk, active=True)
+    form = AutovistoriaResultForm(request.POST or None, initial={"communication_number": client.notification_number})
+    portal_url = "https://autovistoria.rio.rj.gov.br/ConsultaPublica.php"
+    if request.method == "POST" and form.is_valid():
+        communication_number = form.cleaned_data["communication_number"].strip()
+        duplicate_filters = {"client": client, "source": "Autovistoria Rio"}
+        if communication_number:
+            duplicate_filters["communication_number"] = communication_number
+        else:
+            duplicate_filters["title"] = _automatic_opportunity_title(client)
+        opportunity = Opportunity.objects.filter(**duplicate_filters).first()
+        created = opportunity is None
+        if created:
+            opportunity = Opportunity(client=client, owner=request.user, title=_automatic_opportunity_title(client))
+        opportunity.stage = "lead"
+        opportunity.source = "Autovistoria Rio"
+        opportunity.communication_number = communication_number
+        opportunity.consultation_status = form.cleaned_data["consultation_status"].strip()
+        opportunity.consultation_notes = form.cleaned_data["consultation_notes"].strip()
+        opportunity.consultation_address = _client_consultation_address(client)
+        opportunity.source_url = portal_url
+        opportunity.consulted_at = timezone.now()
+        opportunity.save()
+        if communication_number and client.notification_number != communication_number:
+            client.notification_number = communication_number
+            client.save(update_fields=("notification_number", "updated_at"))
+        AuditLog.objects.create(
+            actor=request.user, action="consulta_autovistoria", entity="Opportunity", entity_id=str(opportunity.pk),
+            details={"cliente": client.name, "comunicado": communication_number, "situacao": opportunity.consultation_status, "criado": created},
+        )
+        messages.success(request, "Oportunidade criada a partir da consulta." if created else "Oportunidade existente atualizada com o resultado da consulta.")
+        return redirect("opportunities")
+    return render(request, "client_autovistoria.html", {"client": client, "form": form, "portal_url": portal_url, "consultation_address": _client_consultation_address(client)})
 
 
 def _automatic_opportunity_title(client):

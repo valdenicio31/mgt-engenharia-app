@@ -75,3 +75,27 @@ class CrudWorkflowTests(TestCase):
         response = self.client.post(reverse("clients_to_opportunities"), follow=True)
         self.assertContains(response, "Selecione pelo menos um condomínio")
         self.assertEqual(Opportunity.objects.count(), 0)
+
+    def test_autovistoria_workflow_creates_and_updates_without_duplicate(self):
+        self.condominium.street = "Rua das Flores"
+        self.condominium.address_number = "100"
+        self.condominium.neighborhood = "Centro"
+        self.condominium.save()
+        page = self.client.get(reverse("client_autovistoria", args=(self.condominium.pk,)))
+        self.assertContains(page, "Rua das Flores")
+        self.assertContains(page, "Abrir portal da Prefeitura")
+        payload = {
+            "communication_number": "COM-123",
+            "consultation_status": "Sem comunicado vigente",
+            "consultation_notes": "Consulta manual concluída.",
+        }
+        response = self.client.post(reverse("client_autovistoria", args=(self.condominium.pk,)), payload, follow=True)
+        self.assertContains(response, "Oportunidade criada a partir da consulta")
+        opportunity = Opportunity.objects.get(client=self.condominium, communication_number="COM-123")
+        self.assertEqual(opportunity.source, "Autovistoria Rio")
+        self.assertEqual(opportunity.consultation_status, "Sem comunicado vigente")
+        payload["consultation_status"] = "Comunicado localizado"
+        self.client.post(reverse("client_autovistoria", args=(self.condominium.pk,)), payload)
+        self.assertEqual(Opportunity.objects.filter(client=self.condominium, communication_number="COM-123").count(), 1)
+        opportunity.refresh_from_db()
+        self.assertEqual(opportunity.consultation_status, "Comunicado localizado")

@@ -135,6 +135,12 @@ class UserProfileForm(forms.ModelForm):
             profile.save()
         return profile
 
+
+class AutovistoriaResultForm(forms.Form):
+    communication_number = forms.CharField(label="Número do comunicado", max_length=50, required=False)
+    consultation_status = forms.CharField(label="Situação encontrada", max_length=180)
+    consultation_notes = forms.CharField(label="Observações", required=False, widget=forms.Textarea(attrs={"rows": 4}))
+
 class OpportunityForm(forms.ModelForm):
     class Meta:
         model = Opportunity
