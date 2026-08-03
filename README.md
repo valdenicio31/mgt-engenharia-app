@@ -19,6 +19,9 @@ Entrega da Fase 22 que consolida o protótipo homologado em uma aplicação Djan
 - botões globais Voltar e Avançar;
 - carta assinada por Márcio Guimarães;
 - RAT do dia com cálculo de horas, alteração versionada, exclusão, auditoria e documento para impressão/PDF.
+- tarefas com data de execução, hora inicial/final, horas planejadas e percentual de conclusão;
+- RAT preenchida automaticamente pelas tarefas do dia;
+- rodapé da RAT com técnico, cliente, conclusão, planejado, executado, saldo e crédito VIA IA.
 
 ## Execução local
 

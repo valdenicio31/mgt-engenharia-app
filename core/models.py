@@ -111,7 +111,29 @@ class Task(Timestamped):
     title = models.CharField("tarefa", max_length=180)
     assignee = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="responsável", on_delete=models.PROTECT)
     due_date = models.DateField("prazo", null=True, blank=True)
+    execution_date = models.DateField("data de execução", null=True, blank=True)
+    start_time = models.TimeField("hora inicial", null=True, blank=True)
+    end_time = models.TimeField("hora final", null=True, blank=True)
+    planned_hours = models.DecimalField("horas planejadas", max_digits=5, decimal_places=2, default=0)
+    progress = models.PositiveSmallIntegerField("conclusão (%)", default=0)
     completed = models.BooleanField("concluída", default=False)
+
+    @property
+    def executed_hours(self):
+        if not self.execution_date or not self.start_time or not self.end_time:
+            return 0
+        from datetime import datetime
+        start = datetime.combine(self.execution_date, self.start_time)
+        end = datetime.combine(self.execution_date, self.end_time)
+        return round(max(0, (end - start).total_seconds() / 3600), 2)
+
+    def save(self, *args, **kwargs):
+        if self.completed:
+            self.progress = 100
+        self.progress = min(100, max(0, self.progress))
+        super().save(*args, **kwargs)
+        average = self.project.tasks.aggregate(value=models.Avg("progress"))["value"] or 0
+        Project.objects.filter(pk=self.project_id).update(progress=round(average))
     def __str__(self): return self.title
 
 class RAT(Timestamped):

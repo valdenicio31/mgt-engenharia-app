@@ -172,8 +172,15 @@ class ProjectForm(forms.ModelForm):
 class TaskForm(forms.ModelForm):
     class Meta:
         model = Task
-        fields = ("project", "title", "due_date", "completed")
-        widgets = {"due_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")}
+        fields = ("project", "title", "due_date", "execution_date", "start_time", "end_time", "planned_hours", "progress", "completed")
+        widgets = {"due_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"), "execution_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"), "start_time": forms.TimeInput(attrs={"type": "time"}), "end_time": forms.TimeInput(attrs={"type": "time"})}
+
+    def clean(self):
+        cleaned = super().clean()
+        start, end = cleaned.get("start_time"), cleaned.get("end_time")
+        if start and end and end <= start:
+            self.add_error("end_time", "A hora final deve ser posterior à hora inicial.")
+        return cleaned
 
 class RATForm(forms.ModelForm):
     class Meta:

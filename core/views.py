@@ -226,8 +226,10 @@ def rats(request):
     initial = {"service_date": datetime.now().date(), "status": "rascunho"}
     if request.GET.get("gerar") == "hoje" and request.GET.get("projeto"):
         project = get_object_or_404(Project, pk=request.GET["projeto"])
-        tasks = project.tasks.filter(completed=True, updated_at__date=datetime.now().date())
-        initial.update({"project": project, "description": "\n".join(f"• {task.title}" for task in tasks) or "Atividades realizadas no atendimento do dia."})
+        tasks = list(project.tasks.filter(execution_date=datetime.now().date()).order_by("start_time"))
+        starts = [task.start_time for task in tasks if task.start_time]
+        ends = [task.end_time for task in tasks if task.end_time]
+        initial.update({"project": project, "start_time": min(starts) if starts else None, "end_time": max(ends) if ends else None, "description": "\n".join(f"• {task.title} — {task.progress}% concluída ({task.executed_hours}h)" for task in tasks) or "Atividades realizadas no atendimento do dia."})
     form = RATForm(request.POST or None, instance=instance, initial=initial if not instance else None)
     if request.method == "POST" and form.is_valid():
         rat = form.save(commit=False); rat.technician = instance.technician if instance else request.user
@@ -242,7 +244,12 @@ def rats(request):
 
 @login_required
 def rat_document(request, pk):
-    return render(request, "rat_document.html", {"rat": get_object_or_404(RAT.objects.select_related("project__client", "technician"), pk=pk)})
+    rat = get_object_or_404(RAT.objects.select_related("project__client", "technician"), pk=pk)
+    tasks = list(rat.project.tasks.all())
+    planned = round(sum(float(task.planned_hours or 0) for task in tasks), 2)
+    executed = round(sum(float(task.executed_hours or 0) for task in tasks), 2)
+    remaining = round(max(0, planned - executed), 2)
+    return render(request, "rat_document.html", {"rat": rat, "planned_hours": planned, "executed_hours": executed, "remaining_hours": remaining})
 
 @login_required
 def gazette_findings(request):

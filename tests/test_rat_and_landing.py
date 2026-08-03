@@ -1,10 +1,10 @@
-from datetime import date
+from datetime import date, time
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from core.models import Client, Opportunity, Project, RAT, RATRevision
+from core.models import Client, Opportunity, Project, RAT, RATRevision, Task
 
 
 class RATAndLandingTests(TestCase):
@@ -20,7 +20,8 @@ class RATAndLandingTests(TestCase):
         rat = RAT.objects.get()
         self.assertEqual(float(rat.total_hours), 4.0)
         document = self.client.get(reverse("rat_document", args=(rat.pk,)))
-        self.assertContains(document, "Márcio Guimarães")
+        self.assertContains(document, "Técnico responsável")
+        self.assertContains(document, "Condomínio Modelo")
         edit = self.client.post(f"{reverse('rats')}?editar={rat.pk}", {"project": self.project.pk, "service_date": date.today().isoformat(), "start_time": "08:00", "end_time": "13:00", "description": "Inspeção atualizada", "notes": "", "next_steps": "", "status": "enviada"})
         self.assertRedirects(edit, reverse("rats"))
         rat.refresh_from_db()
@@ -38,3 +39,16 @@ class RATAndLandingTests(TestCase):
         opportunity = Opportunity.objects.get()
         self.assertEqual(opportunity.source, "landing_page")
         self.assertEqual(opportunity.client.name, "Condomínio Novo")
+
+    def test_daily_rat_uses_task_times_progress_and_project_summary(self):
+        Task.objects.create(project=self.project, title="Inspeção", assignee=self.user, execution_date=date.today(), start_time=time(8), end_time=time(10, 30), planned_hours=3, progress=50)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.progress, 50)
+        page = self.client.get(reverse("rats") + f"?gerar=hoje&projeto={self.project.pk}")
+        self.assertContains(page, "Inspeção — 50% concluída (2.5h)")
+        rat = RAT.objects.create(project=self.project, service_date=date.today(), start_time=time(8), end_time=time(10, 30), description="Inspeção", technician=self.user)
+        document = self.client.get(reverse("rat_document", args=(rat.pk,)))
+        self.assertContains(document, "50%")
+        self.assertContains(document, "3,0h")
+        self.assertContains(document, "2,5h")
+        self.assertContains(document, "Criado por VIA IA Soluções @By VIA IA 2026")
