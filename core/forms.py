@@ -4,7 +4,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.db import transaction
-from .models import Client, Opportunity, Project, Task, UserProfile
+from .models import Client, Opportunity, Project, Proposal, Task, UserProfile
 
 class EmailCPFAuthenticationForm(AuthenticationForm):
     username = forms.CharField(label="E-mail ou CPF", widget=forms.TextInput(attrs={"autofocus": True, "autocomplete": "username"}))
@@ -134,6 +134,12 @@ class OpportunityForm(forms.ModelForm):
         model = Opportunity
         fields = ("client", "title", "stage", "estimated_value")
 
+class ProposalForm(forms.ModelForm):
+    class Meta:
+        model = Proposal
+        fields = ("opportunity", "number", "amount", "status", "valid_until")
+        widgets = {"valid_until": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")}
+
 class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
@@ -143,3 +149,4 @@ class TaskForm(forms.ModelForm):
     class Meta:
         model = Task
         fields = ("project", "title", "due_date", "completed")
+        widgets = {"due_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")}

@@ -77,38 +77,38 @@ class Client(Timestamped):
     def __str__(self): return self.name
 
 class Opportunity(Timestamped):
-    STAGES = [(x, x.title()) for x in ("lead", "qualificacao", "proposta", "negociacao", "ganha", "perdida")]
-    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="opportunities")
-    title = models.CharField(max_length=180)
-    stage = models.CharField(max_length=20, choices=STAGES, default="lead")
-    estimated_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    STAGES = [("lead", "Lead"), ("qualificacao", "Qualificação"), ("proposta", "Proposta"), ("negociacao", "Negociação"), ("ganha", "Ganha"), ("perdida", "Perdida")]
+    client = models.ForeignKey(Client, verbose_name="cliente/condomínio", on_delete=models.PROTECT, related_name="opportunities")
+    title = models.CharField("título", max_length=180)
+    stage = models.CharField("etapa", max_length=20, choices=STAGES, default="lead")
+    estimated_value = models.DecimalField("valor estimado", max_digits=12, decimal_places=2, default=0)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="responsável", on_delete=models.PROTECT)
     def __str__(self): return self.title
 
 class Proposal(Timestamped):
-    STATUS = [(x, x.title()) for x in ("rascunho", "enviada", "aceita", "recusada")]
-    opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, related_name="proposals")
-    number = models.CharField(max_length=30, unique=True)
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
-    status = models.CharField(max_length=20, choices=STATUS, default="rascunho")
-    valid_until = models.DateField(null=True, blank=True)
+    STATUS = [("rascunho", "Rascunho"), ("enviada", "Enviada"), ("aceita", "Aceita"), ("recusada", "Recusada")]
+    opportunity = models.ForeignKey(Opportunity, verbose_name="oportunidade", on_delete=models.CASCADE, related_name="proposals")
+    number = models.CharField("número", max_length=30, unique=True)
+    amount = models.DecimalField("valor", max_digits=12, decimal_places=2)
+    status = models.CharField("situação", max_length=20, choices=STATUS, default="rascunho")
+    valid_until = models.DateField("válida até", null=True, blank=True)
     def __str__(self): return self.number
 
 class Project(Timestamped):
-    STATUS = [(x, x.title()) for x in ("planejado", "em_execucao", "pausado", "concluido")]
-    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="projects")
-    name = models.CharField(max_length=180)
-    status = models.CharField(max_length=20, choices=STATUS, default="planejado")
-    progress = models.PositiveSmallIntegerField(default=0)
-    manager = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    STATUS = [("planejado", "Planejado"), ("em_execucao", "Em execução"), ("pausado", "Pausado"), ("concluido", "Concluído")]
+    client = models.ForeignKey(Client, verbose_name="cliente/condomínio", on_delete=models.PROTECT, related_name="projects")
+    name = models.CharField("nome do projeto", max_length=180)
+    status = models.CharField("situação", max_length=20, choices=STATUS, default="planejado")
+    progress = models.PositiveSmallIntegerField("progresso (%)", default=0)
+    manager = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="gestor", on_delete=models.PROTECT)
     def __str__(self): return self.name
 
 class Task(Timestamped):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="tasks")
-    title = models.CharField(max_length=180)
-    assignee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
-    due_date = models.DateField(null=True, blank=True)
-    completed = models.BooleanField(default=False)
+    project = models.ForeignKey(Project, verbose_name="projeto", on_delete=models.CASCADE, related_name="tasks")
+    title = models.CharField("tarefa", max_length=180)
+    assignee = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="responsável", on_delete=models.PROTECT)
+    due_date = models.DateField("prazo", null=True, blank=True)
+    completed = models.BooleanField("concluída", default=False)
     def __str__(self): return self.title
 
 class RAT(Timestamped):

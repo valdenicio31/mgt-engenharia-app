@@ -17,7 +17,7 @@
     <p class="import-help">Formatos aceitos: Excel, CSV, TXT e XML — limite de 5 MB.</p>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Condomínio</th><th>Processo</th><th>Notificação</th><th>Validação</th><th>Atualizado</th></tr></thead>
+        <thead><tr><th>Condomínio</th><th>Processo</th><th>Notificação</th><th>Validação</th><th>Atualizado</th><th>Ações</th></tr></thead>
         <tbody>
         {% for item in items %}
           <tr>
@@ -26,15 +26,16 @@
             <td>{{ item.notification_number|default:"—" }}</td>
             <td><span class="status status-{{ item.validation }}">{{ item.get_validation_display }}</span></td>
             <td>{{ item.updated_at|date:'d/m/Y H:i' }}</td>
+            <td class="row-actions"><a class="action-link" href="?editar={{ item.pk }}">Alterar</a><form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">Excluir</button></form></td>
           </tr>
-        {% empty %}<tr><td colspan="5">Nenhum registro.</td></tr>{% endfor %}
+        {% empty %}<tr><td colspan="6">Nenhum registro.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
   </article>
 
   <article class="panel client-form-panel">
-    <h2>Novo cliente ou condomínio</h2>
+    <h2>{% if editing %}Alterar cliente ou condomínio{% else %}Novo cliente ou condomínio{% endif %}</h2>
     <form method="post" class="form client-form">{% csrf_token %}
       {% if form.non_field_errors %}<div class="error">{{ form.non_field_errors }}</div>{% endif %}
 
@@ -67,7 +68,7 @@
         {% include 'partials/form_field.html' with field=form.validation %}
         <div class="checkbox-field">{{ form.active }} <label for="{{ form.active.id_for_label }}">Registro ativo</label>{{ form.active.errors }}</div>
       </div></fieldset>
-      <div class="form-actions"><button type="submit">Salvar registro</button></div>
+      <div class="form-actions"><button type="submit">{% if editing %}Salvar alterações{% else %}Salvar registro{% endif %}</button>{% if editing %}<a class="secondary-button" href="{% url 'clients' %}">Cancelar</a>{% endif %}</div>
     </form>
   </article>
 </section>

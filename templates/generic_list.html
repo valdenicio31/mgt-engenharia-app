@@ -1,1 +1,23 @@
-{% extends 'base.html' %}{% block heading %}{{ title }}{% endblock %}{% block content %}<section class="grid"><article class="panel"><h2>Registros</h2><table><thead><tr><th>Nome / identificação</th><th>Atualizado</th></tr></thead><tbody>{% for item in items %}<tr><td>{{ item }}</td><td>{{ item.updated_at|date:'d/m/Y H:i' }}</td></tr>{% empty %}<tr><td colspan="2">Nenhum registro.</td></tr>{% endfor %}</tbody></table></article><article class="panel"><h2>Novo registro</h2><form method="post" class="form">{% csrf_token %}{{ form.as_p }}<button>Salvar</button></form></article></section>{% endblock %}
+{% extends 'base.html' %}
+{% block heading %}{{ title }}{% endblock %}
+{% block content %}
+<section class="grid">
+  <article class="panel">
+    <div class="records-heading"><h2>Registros</h2><details class="export-menu"><summary>Exportar</summary><div>
+      <a href="{% url 'records_export' resource 'xlsx' %}">Excel</a>
+      <a href="{% url 'records_export' resource 'csv' %}">CSV</a>
+      <a href="{% url 'records_export' resource 'xml' %}">XML</a>
+      <a href="{% url 'records_export' resource 'txt' %}">Texto</a>
+    </div></details></div>
+    <table><thead><tr><th>Nome / identificação</th><th>Atualizado</th><th>Ações</th></tr></thead><tbody>
+    {% for item in items %}<tr><td>{{ item }}</td><td>{{ item.updated_at|date:'d/m/Y H:i' }}</td><td class="row-actions">
+      <a class="action-link" href="?editar={{ item.pk }}">Alterar</a>
+      <form method="post" action="{% url 'record_delete' resource item.pk %}" onsubmit="return confirm('Confirma a exclusão deste registro?')">{% csrf_token %}<button class="danger-link" type="submit">Excluir</button></form>
+    </td></tr>{% empty %}<tr><td colspan="3">Nenhum registro.</td></tr>{% endfor %}
+    </tbody></table>
+  </article>
+  <article class="panel"><h2>{% if editing %}Alterar registro{% else %}Novo registro{% endif %}</h2>
+    <form method="post" class="form">{% csrf_token %}{{ form.as_p }}<button>{% if editing %}Salvar alterações{% else %}Salvar{% endif %}</button>{% if editing %}<a class="secondary-button" href=".">Cancelar</a>{% endif %}</form>
+  </article>
+</section>
+{% endblock %}

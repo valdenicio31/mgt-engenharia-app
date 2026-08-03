@@ -2,6 +2,16 @@
 
 Entrega da Fase 22 que consolida o protótipo homologado em uma aplicação Django implantável no Render. O pacote contempla autenticação, painel, clientes, oportunidades, propostas, projetos, tarefas, RAT, auditoria e verificação de saúde.
 
+## Atualização de 03/08/2026
+
+- alteração e exclusão com confirmação em clientes, oportunidades, propostas, projetos e tarefas;
+- exportação das bases em Excel, CSV, XML e texto;
+- comunicação da oportunidade por e-mail, WhatsApp ou carta pronta para impressão/PDF;
+- cadastro e acompanhamento completo de propostas;
+- campos e situações de projetos e tarefas traduzidos para português;
+- pesquisa do Diário Oficial por data inicial e final, limitada a 31 dias;
+- trilha de auditoria para inclusão, alteração e exclusão.
+
 ## Execução local
 
 Requer Python 3.12+.
