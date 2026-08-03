@@ -1,0 +1,16 @@
+<div class="export-controls" data-export-controls>
+  <select aria-label="Registros para exportar" data-export-scope><option value="selected">Selecionados</option><option value="all">Todos</option></select>
+  <details class="export-menu"><summary>Exportar</summary><div>
+    <a href="#" data-export-url="{{ export_xlsx }}">Excel (.xlsx)</a><a href="#" data-export-url="{{ export_csv }}">CSV (.csv)</a>
+    <a href="#" data-export-url="{{ export_xml }}">XML (.xml)</a><a href="#" data-export-url="{{ export_txt }}">Texto (.txt)</a>
+  </div></details>
+</div>
+<script>
+document.currentScript.previousElementSibling.addEventListener('click', function(event) {
+  const link = event.target.closest('[data-export-url]'); if (!link) return; event.preventDefault();
+  const panel = this.closest('.panel'), scope = this.querySelector('[data-export-scope]').value;
+  const ids = [...panel.querySelectorAll('[data-export-id]:checked')].map(input => input.value);
+  if (scope === 'selected' && !ids.length) { alert('Selecione pelo menos um registro ou escolha a opção Todos.'); return; }
+  window.location.href = link.dataset.exportUrl + (scope === 'selected' ? '?ids=' + ids.join(',') : '');
+});
+</script>

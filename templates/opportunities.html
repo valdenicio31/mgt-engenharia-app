@@ -2,15 +2,16 @@
 {% block content %}
 <section class="grid">
   <article class="panel">
-    <div class="records-heading"><div><h2>Oportunidades</h2><small>Registre o contato realizado e avance a oportunidade pelo funil comercial.</small></div><details class="export-menu"><summary>Exportar</summary><div><a href="{% url 'records_export' 'oportunidades' 'xlsx' %}">Excel</a><a href="{% url 'records_export' 'oportunidades' 'csv' %}">CSV</a><a href="{% url 'records_export' 'oportunidades' 'xml' %}">XML</a><a href="{% url 'records_export' 'oportunidades' 'txt' %}">Texto</a></div></details></div>
-    <table><thead><tr><th>Oportunidade</th><th>Etapa</th><th>Comunicação</th><th>Ações</th></tr></thead><tbody>
-    {% for item in items %}<tr><td><strong>{{ item.title }}</strong><br><small>{{ item.client }}</small></td><td>{{ item.get_stage_display }}</td><td class="row-actions">
+    <div class="records-heading"><div><h2>Oportunidades</h2><small>Registre o contato realizado e avance a oportunidade pelo funil comercial.</small></div>{% url 'records_export' 'oportunidades' 'xlsx' as export_xlsx %}{% url 'records_export' 'oportunidades' 'csv' as export_csv %}{% url 'records_export' 'oportunidades' 'xml' as export_xml %}{% url 'records_export' 'oportunidades' 'txt' as export_txt %}{% include 'partials/export_controls.html' %}</div>
+    <table><thead><tr><th><label class="select-all"><input type="checkbox" data-select-all> Todos</label></th><th>Oportunidade</th><th>Etapa</th><th>Comunicação</th><th>Ações</th></tr></thead><tbody>
+    {% for item in items %}<tr><td><input type="checkbox" data-export-id value="{{ item.pk }}" aria-label="Selecionar {{ item.title }}"></td><td><strong>{{ item.title }}</strong><br><small>{{ item.client }}</small></td><td>{{ item.get_stage_display }}</td><td class="row-actions">
       {% if item.client.email %}<a class="action-link" href="mailto:{{ item.client.email }}?subject={{ item.title|urlencode }}">E-mail</a>{% endif %}
       {% if item.client.phone %}<a class="action-link" target="_blank" rel="noopener" href="https://wa.me/55{{ item.client.phone|cut:' '|cut:'-'|cut:'('|cut:')' }}?text=Olá%2C%20somos%20da%20MGT%20Engenharia.%20Gostaríamos%20de%20conversar%20sobre%20{{ item.title|urlencode }}.">WhatsApp</a>{% endif %}
       <a class="action-link" target="_blank" href="{% url 'opportunity_letter' item.pk %}">Carta</a>
     </td><td class="row-actions"><a class="action-link" href="?editar={{ item.pk }}">Alterar</a><form method="post" action="{% url 'record_delete' 'oportunidades' item.pk %}" onsubmit="return confirm('Confirma a exclusão?')">{% csrf_token %}<button class="danger-link">Excluir</button></form></td></tr>
-    {% empty %}<tr><td colspan="4">Nenhuma oportunidade.</td></tr>{% endfor %}</tbody></table>
+    {% empty %}<tr><td colspan="5">Nenhuma oportunidade.</td></tr>{% endfor %}</tbody></table>
   </article>
   <article class="panel"><h2>{% if editing %}Alterar oportunidade{% else %}Nova oportunidade{% endif %}</h2><form method="post" class="form">{% csrf_token %}{{ form.as_p }}<button>{% if editing %}Salvar alterações{% else %}Salvar{% endif %}</button>{% if editing %}<a class="secondary-button" href="{% url 'opportunities' %}">Cancelar</a>{% endif %}</form></article>
 </section>
+<script>document.querySelector('[data-select-all]')?.addEventListener('change', function(){this.closest('.panel').querySelectorAll('[data-export-id]').forEach(item => item.checked = this.checked);});</script>
 {% endblock %}

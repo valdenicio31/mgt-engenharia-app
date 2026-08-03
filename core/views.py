@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from urllib.parse import quote
 from openpyxl import Workbook
+from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -22,6 +23,9 @@ def health(request):
         cursor.execute("SELECT 1")
         cursor.fetchone()
     return JsonResponse({"status": "ok", "service": "mgt-engenharia"})
+
+def landing_page(request):
+    return render(request, "landing_page.html", {"contact_email": settings.MGT_CONTACT_EMAIL, "whatsapp": settings.MGT_WHATSAPP})
 
 def first_access(request):
     if request.user.is_authenticated:
@@ -56,6 +60,16 @@ def profile(request):
         messages.success(request, "Seus dados foram atualizados com sucesso.")
         return redirect("profile")
     return render(request, "profile.html", {"form": form, "profile": profile_obj})
+
+@login_required
+def profile_photo(request):
+    profile_obj = get_object_or_404(UserProfile, user=request.user)
+    if not profile_obj.photo_data:
+        return HttpResponse(status=404)
+    response = HttpResponse(bytes(profile_obj.photo_data), content_type=profile_obj.photo_content_type or "image/jpeg")
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
 
 def _crud(request, model, form_class, title, template="generic_list.html"):
     edit_id = request.GET.get("editar")
@@ -95,11 +109,11 @@ def record_delete(request, resource, pk):
         messages.error(request, "Este registro está relacionado a outros dados e não pode ser excluído.")
     return redirect(f"/{resource}/")
 
-def _generic_export(model, fmt):
+def _generic_export(model, fmt, queryset=None):
     fields = [f for f in model._meta.fields if f.name not in {"id", "created_at", "updated_at"}]
     headers = [str(f.verbose_name).title() for f in fields]
     rows = []
-    for obj in model.objects.all():
+    for obj in (queryset if queryset is not None else model.objects.all()):
         values = []
         for field in fields:
             display = getattr(obj, f"get_{field.name}_display", None)
@@ -127,7 +141,11 @@ def _generic_export(model, fmt):
 def records_export(request, resource, fmt):
     model = CRUD_MODELS.get(resource)
     if not model or fmt not in {"xlsx", "csv", "txt", "xml"}: return HttpResponse("Exportação inválida.", status=400)
-    content, content_type = _generic_export(model, fmt)
+    queryset = model.objects.all()
+    ids = request.GET.get("ids", "").strip()
+    if ids:
+        queryset = queryset.filter(pk__in=[value for value in ids.split(",") if value.isdigit()])
+    content, content_type = _generic_export(model, fmt, queryset)
     response = HttpResponse(content, content_type=content_type)
     response["Content-Disposition"] = f'attachment; filename="MGT_{resource}.{fmt}"'
     return response
@@ -153,8 +171,12 @@ def clients_import(request):
 
 @login_required
 def clients_export(request, fmt):
+    queryset = Client.objects.all()
+    ids = request.GET.get("ids", "").strip()
+    if ids:
+        queryset = queryset.filter(pk__in=[value for value in ids.split(",") if value.isdigit()])
     try:
-        content, content_type = export_clients(fmt.lower())
+        content, content_type = export_clients(fmt.lower(), queryset)
     except ValueError as exc:
         return HttpResponse(str(exc), status=400)
     filename = f"MGT_Engenharia_Condominios.{fmt.lower()}"

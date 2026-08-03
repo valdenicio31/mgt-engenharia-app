@@ -3,7 +3,7 @@
 {% block content %}
 <section class="profile-layout">
   <article class="panel profile-card">
-    <div class="profile-photo">{% if profile.photo %}<img src="{{ profile.photo.url }}" alt="Foto de perfil">{% else %}<span>{{ user.first_name|first|default:"U" }}</span>{% endif %}</div>
+    <div class="profile-photo">{% if profile.photo_data %}<img src="{% url 'profile_photo' %}" alt="Foto de perfil">{% else %}<span>{{ user.first_name|first|default:"U" }}</span>{% endif %}</div>
     <h2>{{ user.get_full_name|default:user.email }}</h2><p>{{ user.email }}</p><small>Complete seus dados para manter seu cadastro atualizado.</small>
   </article>
   <article class="panel client-form-panel"><h2>Dados pessoais e endereço</h2>

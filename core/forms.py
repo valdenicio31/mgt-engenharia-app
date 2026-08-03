@@ -116,6 +116,14 @@ class UserProfileForm(forms.ModelForm):
         photo = self.cleaned_data.get("photo")
         if photo and getattr(photo, "size", 0) > 3 * 1024 * 1024:
             raise forms.ValidationError("A foto deve ter no máximo 3 MB.")
+        if photo:
+            allowed = {"image/jpeg", "image/png", "image/webp"}
+            content_type = getattr(photo, "content_type", "")
+            if content_type not in allowed:
+                raise forms.ValidationError("Use uma imagem JPG, PNG ou WEBP.")
+            self._photo_bytes = photo.read()
+            self._photo_content_type = content_type
+            photo.seek(0)
         return photo
 
     @transaction.atomic
@@ -124,6 +132,14 @@ class UserProfileForm(forms.ModelForm):
         self.user.first_name = self.cleaned_data["first_name"].strip()
         self.user.last_name = self.cleaned_data["last_name"].strip()
         self.user.email = self.cleaned_data["email"]
+        if hasattr(self, "_photo_bytes"):
+            profile.photo_data = self._photo_bytes
+            profile.photo_content_type = self._photo_content_type
+            profile.photo = ""
+        elif self.cleaned_data.get("photo") is False:
+            profile.photo_data = None
+            profile.photo_content_type = ""
+            profile.photo = ""
         if commit:
             self.user.save()
             profile.save()

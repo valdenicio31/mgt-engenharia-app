@@ -3,8 +3,10 @@ from . import views
 
 urlpatterns = [
     path("health/", views.health, name="health"),
+    path("apresentacao/", views.landing_page, name="landing_page"),
     path("primeiro-acesso/", views.first_access, name="first_access"),
     path("meu-cadastro/", views.profile, name="profile"),
+    path("meu-cadastro/foto/", views.profile_photo, name="profile_photo"),
     path("", views.dashboard, name="dashboard"),
     path("clientes/", views.clients, name="clients"),
     path("clientes/importar/", views.clients_import, name="clients_import"),

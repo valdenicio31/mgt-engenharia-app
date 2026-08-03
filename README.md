@@ -11,6 +11,10 @@ Entrega da Fase 22 que consolida o protótipo homologado em uma aplicação Djan
 - campos e situações de projetos e tarefas traduzidos para português;
 - pesquisa do Diário Oficial por data inicial e final, limitada a 31 dias;
 - trilha de auditoria para inclusão, alteração e exclusão.
+- foto do usuário armazenada no PostgreSQL e exibida com segurança no Render;
+- exportação por registros selecionados ou por todos os registros;
+- carta comercial com valores, serviços, logotipo e envio por e-mail/WhatsApp;
+- Landing Page pública da MGT em `/apresentacao/`.
 
 ## Execução local
 

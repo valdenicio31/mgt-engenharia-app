@@ -8,19 +8,17 @@
         <form action="{% url 'clients_import' %}" method="post" enctype="multipart/form-data" class="import-form">{% csrf_token %}
           <label class="file-button">Importar arquivo<input type="file" name="file" accept=".xlsx,.csv,.txt,.xml" required onchange="this.form.submit()"></label>
         </form>
-        <details class="export-menu"><summary>Exportar</summary><div>
-          <a href="{% url 'clients_export' 'xlsx' %}">Excel (.xlsx)</a><a href="{% url 'clients_export' 'csv' %}">CSV (.csv)</a>
-          <a href="{% url 'clients_export' 'txt' %}">Texto (.txt)</a><a href="{% url 'clients_export' 'xml' %}">XML (.xml)</a>
-        </div></details>
+        {% url 'clients_export' 'xlsx' as export_xlsx %}{% url 'clients_export' 'csv' as export_csv %}{% url 'clients_export' 'xml' as export_xml %}{% url 'clients_export' 'txt' as export_txt %}{% include 'partials/export_controls.html' %}
       </div>
     </div>
     <p class="import-help">Formatos aceitos: Excel, CSV, TXT e XML — limite de 5 MB.</p>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Condomínio</th><th>Processo</th><th>Notificação</th><th>Validação</th><th>Atualizado</th><th>Ações</th></tr></thead>
+        <thead><tr><th><label class="select-all"><input type="checkbox" data-select-all> Todos</label></th><th>Condomínio</th><th>Processo</th><th>Notificação</th><th>Validação</th><th>Atualizado</th><th>Ações</th></tr></thead>
         <tbody>
         {% for item in items %}
           <tr>
+            <td><input type="checkbox" data-export-id value="{{ item.pk }}" aria-label="Selecionar {{ item.name }}"></td>
             <td><strong>{{ item.name }}</strong><small>{{ item.street }}{% if item.address_number %}, {{ item.address_number }}{% endif %}{% if item.neighborhood %} — {{ item.neighborhood }}{% endif %}</small></td>
             <td>{{ item.process_number|default:"—" }}</td>
             <td>{{ item.notification_number|default:"—" }}</td>
@@ -28,7 +26,7 @@
             <td>{{ item.updated_at|date:'d/m/Y H:i' }}</td>
             <td class="row-actions"><a class="action-link" href="?editar={{ item.pk }}">Alterar</a><form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">Excluir</button></form></td>
           </tr>
-        {% empty %}<tr><td colspan="6">Nenhum registro.</td></tr>{% endfor %}
+        {% empty %}<tr><td colspan="7">Nenhum registro.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
@@ -72,4 +70,5 @@
     </form>
   </article>
 </section>
+<script>document.querySelector('[data-select-all]')?.addEventListener('change', function(){this.closest('.panel').querySelectorAll('[data-export-id]').forEach(item => item.checked = this.checked);});</script>
 {% endblock %}

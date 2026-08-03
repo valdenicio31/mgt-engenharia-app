@@ -40,3 +40,22 @@ class CrudWorkflowTests(TestCase):
     def test_gazette_rejects_invalid_period(self):
         response = self.client.post(reverse("gazette_findings"), {"start_date": "2026-01-01", "end_date": "2026-03-01"}, follow=True)
         self.assertContains(response, "período válido de até 31 dias")
+
+    def test_export_can_limit_records_or_include_all(self):
+        other = Client.objects.create(name="Outro Condomínio")
+        selected = self.client.get(reverse("clients_export", args=("csv",)) + f"?ids={self.condominium.pk}")
+        text = selected.content.decode("utf-8-sig")
+        self.assertIn("Condomínio Teste", text)
+        self.assertNotIn("Outro Condomínio", text)
+        all_records = self.client.get(reverse("clients_export", args=("csv",)))
+        self.assertIn("Outro Condomínio", all_records.content.decode("utf-8-sig"))
+
+    def test_public_landing_page_and_commercial_letter(self):
+        landing = self.client.get(reverse("landing_page"))
+        self.assertEqual(landing.status_code, 200)
+        self.assertContains(landing, "Nossos valores")
+        opportunity = Opportunity.objects.create(client=self.condominium, title="Manutenção predial", owner=self.user)
+        letter = self.client.get(reverse("opportunity_letter", args=(opportunity.pk,)))
+        self.assertContains(letter, "Enviar por e-mail")
+        self.assertContains(letter, "Enviar por WhatsApp")
+        self.assertContains(letter, "ética, transparência")

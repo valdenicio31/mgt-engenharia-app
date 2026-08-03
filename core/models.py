@@ -11,6 +11,8 @@ class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")
     cpf = models.CharField("CPF", max_length=11, unique=True)
     photo = models.ImageField("foto", upload_to="profiles/", blank=True)
+    photo_data = models.BinaryField("conteúdo da foto", null=True, blank=True, editable=False)
+    photo_content_type = models.CharField("tipo da foto", max_length=50, blank=True, editable=False)
     phone = models.CharField("telefone", max_length=30, blank=True)
     birth_date = models.DateField("data de nascimento", null=True, blank=True)
     street = models.CharField("rua/logradouro", max_length=180, blank=True)
