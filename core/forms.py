@@ -45,7 +45,89 @@ class FirstAccessForm(UserCreationForm):
 class ClientForm(forms.ModelForm):
     class Meta:
         model = Client
-        fields = ("name", "document", "email", "phone", "active")
+        fields = (
+            "name", "document", "email", "phone",
+            "process_number", "publication_date", "notification_number",
+            "street", "address_number", "complement", "neighborhood",
+            "city", "state", "postal_code", "classification",
+            "action_description", "validation", "active",
+        )
+        widgets = {
+            "publication_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "action_description": forms.Textarea(attrs={"rows": 4}),
+            "state": forms.TextInput(attrs={"maxlength": 2, "style": "text-transform:uppercase"}),
+            "postal_code": forms.TextInput(attrs={"placeholder": "00000-000"}),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        document = re.sub(r"\D", "", cleaned.get("document") or "")
+        process = (cleaned.get("process_number") or "").strip()
+        notification = (cleaned.get("notification_number") or "").strip()
+        queryset = Client.objects.exclude(pk=self.instance.pk)
+        duplicate_document = document and any(
+            re.sub(r"\D", "", value or "") == document
+            for value in queryset.values_list("document", flat=True)
+        )
+        if duplicate_document:
+            self.add_error("document", "Já existe um cliente com este CNPJ/CPF.")
+        if process and notification and queryset.filter(process_number__iexact=process, notification_number__iexact=notification).exists():
+            self.add_error("notification_number", "Este processo e esta notificação já estão cadastrados.")
+        return cleaned
+
+
+class UserProfileForm(forms.ModelForm):
+    first_name = forms.CharField(label="Nome", max_length=150)
+    last_name = forms.CharField(label="Sobrenome", max_length=150, required=False)
+    email = forms.EmailField(label="E-mail")
+
+    class Meta:
+        model = UserProfile
+        fields = ("photo", "cpf", "phone", "birth_date", "street", "address_number", "complement", "neighborhood", "city", "state", "postal_code")
+        widgets = {
+            "birth_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "state": forms.TextInput(attrs={"maxlength": 2, "style": "text-transform:uppercase"}),
+            "postal_code": forms.TextInput(attrs={"placeholder": "00000-000"}),
+        }
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+        if user:
+            self.fields["first_name"].initial = user.first_name
+            self.fields["last_name"].initial = user.last_name
+            self.fields["email"].initial = user.email
+
+    def clean_cpf(self):
+        cpf = re.sub(r"\D", "", self.cleaned_data["cpf"])
+        if len(cpf) != 11 or len(set(cpf)) == 1:
+            raise forms.ValidationError("Informe um CPF válido com 11 dígitos.")
+        if UserProfile.objects.exclude(pk=self.instance.pk).filter(cpf=cpf).exists():
+            raise forms.ValidationError("Este CPF já pertence a outro usuário.")
+        return cpf
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+        if get_user_model().objects.exclude(pk=self.user.pk).filter(email__iexact=email).exists():
+            raise forms.ValidationError("Este e-mail já pertence a outro usuário.")
+        return email
+
+    def clean_photo(self):
+        photo = self.cleaned_data.get("photo")
+        if photo and getattr(photo, "size", 0) > 3 * 1024 * 1024:
+            raise forms.ValidationError("A foto deve ter no máximo 3 MB.")
+        return photo
+
+    @transaction.atomic
+    def save(self, commit=True):
+        profile = super().save(commit=False)
+        self.user.first_name = self.cleaned_data["first_name"].strip()
+        self.user.last_name = self.cleaned_data["last_name"].strip()
+        self.user.email = self.cleaned_data["email"]
+        if commit:
+            self.user.save()
+            profile.save()
+        return profile
 
 class OpportunityForm(forms.ModelForm):
     class Meta:

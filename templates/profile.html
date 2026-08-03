@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block heading %}Meu cadastro{% endblock %}
+{% block content %}
+<section class="profile-layout">
+  <article class="panel profile-card">
+    <div class="profile-photo">{% if profile.photo %}<img src="{{ profile.photo.url }}" alt="Foto de perfil">{% else %}<span>{{ user.first_name|first|default:"U" }}</span>{% endif %}</div>
+    <h2>{{ user.get_full_name|default:user.email }}</h2><p>{{ user.email }}</p><small>Complete seus dados para manter seu cadastro atualizado.</small>
+  </article>
+  <article class="panel client-form-panel"><h2>Dados pessoais e endereço</h2>
+    <form method="post" enctype="multipart/form-data" class="form client-form">{% csrf_token %}
+      <fieldset><legend>Identificação</legend><div class="form-grid">
+        {% include 'partials/form_field.html' with field=form.photo wide=True %}
+        {% include 'partials/form_field.html' with field=form.first_name %}{% include 'partials/form_field.html' with field=form.last_name %}
+        {% include 'partials/form_field.html' with field=form.cpf %}{% include 'partials/form_field.html' with field=form.birth_date %}
+        {% include 'partials/form_field.html' with field=form.email %}{% include 'partials/form_field.html' with field=form.phone %}
+      </div></fieldset>
+      <fieldset><legend>Endereço</legend><div class="form-grid">
+        {% include 'partials/form_field.html' with field=form.street wide=True %}{% include 'partials/form_field.html' with field=form.address_number %}
+        {% include 'partials/form_field.html' with field=form.complement %}{% include 'partials/form_field.html' with field=form.neighborhood %}
+        {% include 'partials/form_field.html' with field=form.city %}{% include 'partials/form_field.html' with field=form.state %}{% include 'partials/form_field.html' with field=form.postal_code %}
+      </div></fieldset>
+      <div class="form-actions"><button type="submit">Salvar meus dados</button></div>
+    </form>
+  </article>
+</section>
+{% endblock %}

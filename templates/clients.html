@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block heading %}{{ title }}{% endblock %}
+{% block content %}
+<section class="clients-layout">
+  <article class="panel clients-list">
+    <div class="records-heading"><div><h2>Registros</h2><small>Importe ou exporte a base de condomínios.</small></div>
+      <div class="data-actions">
+        <form action="{% url 'clients_import' %}" method="post" enctype="multipart/form-data" class="import-form">{% csrf_token %}
+          <label class="file-button">Importar arquivo<input type="file" name="file" accept=".xlsx,.csv,.txt,.xml" required onchange="this.form.submit()"></label>
+        </form>
+        <details class="export-menu"><summary>Exportar</summary><div>
+          <a href="{% url 'clients_export' 'xlsx' %}">Excel (.xlsx)</a><a href="{% url 'clients_export' 'csv' %}">CSV (.csv)</a>
+          <a href="{% url 'clients_export' 'txt' %}">Texto (.txt)</a><a href="{% url 'clients_export' 'xml' %}">XML (.xml)</a>
+        </div></details>
+      </div>
+    </div>
+    <p class="import-help">Formatos aceitos: Excel, CSV, TXT e XML — limite de 5 MB.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Condomínio</th><th>Processo</th><th>Notificação</th><th>Validação</th><th>Atualizado</th></tr></thead>
+        <tbody>
+        {% for item in items %}
+          <tr>
+            <td><strong>{{ item.name }}</strong><small>{{ item.street }}{% if item.address_number %}, {{ item.address_number }}{% endif %}{% if item.neighborhood %} — {{ item.neighborhood }}{% endif %}</small></td>
+            <td>{{ item.process_number|default:"—" }}</td>
+            <td>{{ item.notification_number|default:"—" }}</td>
+            <td><span class="status status-{{ item.validation }}">{{ item.get_validation_display }}</span></td>
+            <td>{{ item.updated_at|date:'d/m/Y H:i' }}</td>
+          </tr>
+        {% empty %}<tr><td colspan="5">Nenhum registro.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="panel client-form-panel">
+    <h2>Novo cliente ou condomínio</h2>
+    <form method="post" class="form client-form">{% csrf_token %}
+      {% if form.non_field_errors %}<div class="error">{{ form.non_field_errors }}</div>{% endif %}
+
+      <fieldset><legend>Identificação e contato</legend><div class="form-grid">
+        {% include 'partials/form_field.html' with field=form.name wide=True %}
+        {% include 'partials/form_field.html' with field=form.document %}
+        {% include 'partials/form_field.html' with field=form.phone %}
+        {% include 'partials/form_field.html' with field=form.email wide=True %}
+      </div></fieldset>
+
+      <fieldset><legend>Notificação do Diário Oficial</legend><div class="form-grid">
+        {% include 'partials/form_field.html' with field=form.process_number %}
+        {% include 'partials/form_field.html' with field=form.publication_date %}
+        {% include 'partials/form_field.html' with field=form.notification_number %}
+        {% include 'partials/form_field.html' with field=form.classification %}
+      </div></fieldset>
+
+      <fieldset><legend>Endereço</legend><div class="form-grid address-grid">
+        {% include 'partials/form_field.html' with field=form.street wide=True %}
+        {% include 'partials/form_field.html' with field=form.address_number %}
+        {% include 'partials/form_field.html' with field=form.complement %}
+        {% include 'partials/form_field.html' with field=form.neighborhood %}
+        {% include 'partials/form_field.html' with field=form.city %}
+        {% include 'partials/form_field.html' with field=form.state %}
+        {% include 'partials/form_field.html' with field=form.postal_code %}
+      </div></fieldset>
+
+      <fieldset><legend>Tratamento da notificação</legend><div class="form-grid">
+        {% include 'partials/form_field.html' with field=form.action_description wide=True %}
+        {% include 'partials/form_field.html' with field=form.validation %}
+        <div class="checkbox-field">{{ form.active }} <label for="{{ form.active.id_for_label }}">Registro ativo</label>{{ form.active.errors }}</div>
+      </div></fieldset>
+      <div class="form-actions"><button type="submit">Salvar registro</button></div>
+    </form>
+  </article>
+</section>
+{% endblock %}

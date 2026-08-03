@@ -1,25 +1,78 @@
 from django.conf import settings
 from django.db import models
 
-class UserProfile(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")
-    cpf = models.CharField("CPF", max_length=11, unique=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.user.get_full_name() or self.user.email} — {self.cpf}"
-
 class Timestamped(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     class Meta:
         abstract = True
 
+class UserProfile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")
+    cpf = models.CharField("CPF", max_length=11, unique=True)
+    photo = models.ImageField("foto", upload_to="profiles/", blank=True)
+    phone = models.CharField("telefone", max_length=30, blank=True)
+    birth_date = models.DateField("data de nascimento", null=True, blank=True)
+    street = models.CharField("rua/logradouro", max_length=180, blank=True)
+    address_number = models.CharField("número", max_length=20, blank=True)
+    complement = models.CharField("complemento", max_length=80, blank=True)
+    neighborhood = models.CharField("bairro", max_length=100, blank=True)
+    city = models.CharField("cidade", max_length=100, blank=True, default="Rio de Janeiro")
+    state = models.CharField("estado", max_length=2, blank=True, default="RJ")
+    postal_code = models.CharField("CEP", max_length=10, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.get_full_name() or self.user.email} — {self.cpf}"
+
+class GazetteFinding(Timestamped):
+    STATUS = [("novo", "Novo"), ("conferido", "Conferido"), ("convertido", "Convertido em lead"), ("descartado", "Descartado")]
+    publication_date = models.DateField("data da publicação")
+    edition_id = models.CharField(max_length=30)
+    page = models.PositiveIntegerField()
+    process_number = models.CharField(max_length=50, blank=True)
+    condominium_name = models.CharField(max_length=220)
+    notification_number = models.CharField(max_length=50)
+    address = models.CharField(max_length=260)
+    source_url = models.URLField(max_length=500)
+    raw_excerpt = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS, default="novo")
+
+    class Meta:
+        ordering = ("-publication_date", "condominium_name")
+        constraints = [models.UniqueConstraint(fields=("edition_id", "notification_number"), name="unique_gazette_notification")]
+
+    def __str__(self):
+        return f"{self.condominium_name} — {self.notification_number}"
+
 class Client(Timestamped):
+    CLASSIFICATIONS = [
+        ("autovistoria", "Autovistoria explícita"),
+        ("manutencao_predial", "Fiscalização de Manutenção Predial"),
+        ("outros", "Outros"),
+    ]
+    VALIDATIONS = [
+        ("validar", "Validar"),
+        ("confirmado", "Confirmado"),
+        ("descartado", "Descartado"),
+    ]
     name = models.CharField("nome", max_length=160)
     document = models.CharField("CNPJ/CPF", max_length=20, blank=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=30, blank=True)
+    process_number = models.CharField("número do processo", max_length=50, blank=True)
+    publication_date = models.DateField("data da publicação", null=True, blank=True)
+    street = models.CharField("rua/logradouro", max_length=180, blank=True)
+    address_number = models.CharField("número", max_length=20, blank=True)
+    complement = models.CharField("complemento", max_length=80, blank=True)
+    neighborhood = models.CharField("bairro", max_length=100, blank=True)
+    city = models.CharField("cidade", max_length=100, blank=True, default="Rio de Janeiro")
+    state = models.CharField("estado", max_length=2, blank=True, default="RJ")
+    postal_code = models.CharField("CEP", max_length=10, blank=True)
+    notification_number = models.CharField("número da notificação", max_length=50, blank=True)
+    classification = models.CharField("classificação", max_length=30, choices=CLASSIFICATIONS, blank=True)
+    action_description = models.TextField("descrição / providência", blank=True)
+    validation = models.CharField("validação", max_length=20, choices=VALIDATIONS, default="validar")
     active = models.BooleanField(default=True)
     def __str__(self): return self.name
 

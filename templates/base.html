@@ -2,8 +2,8 @@
 <html lang="pt-br"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MGT Engenharia | VIA IA</title><link rel="stylesheet" href="{% static 'css/style.css' %}"><link rel="stylesheet" href="{% static 'css/branding.css' %}"></head>
 <body><aside><div class="brand"><img src="{% static 'img/viaia-logo.png' %}" alt="Logotipo VIA IA" class="brand-logo"><strong>MGT Engenharia</strong></div><nav>
-<a href="{% url 'dashboard' %}">Visão geral</a><a href="{% url 'clients' %}">Clientes</a><a href="{% url 'opportunities' %}">Oportunidades</a>
-<a href="{% url 'proposals' %}">Propostas</a><a href="{% url 'projects' %}">Projetos</a><a href="{% url 'tasks' %}">Tarefas</a><a href="{% url 'rats' %}">RAT</a></nav>
+<a href="{% url 'dashboard' %}">Visão geral</a><a href="{% url 'profile' %}">Meu cadastro</a><a href="{% url 'clients' %}">Clientes</a><a href="{% url 'opportunities' %}">Oportunidades</a>
+<a href="{% url 'proposals' %}">Propostas</a><a href="{% url 'projects' %}">Projetos</a><a href="{% url 'tasks' %}">Tarefas</a><a href="{% url 'rats' %}">RAT</a><a href="{% url 'gazette_findings' %}">Diário Oficial</a></nav>
 {% if user.is_authenticated %}<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="logout">Sair</button></form>{% endif %}</aside>
-<main><header><div><small>GESTÃO OPERACIONAL INTEGRADA</small><h1>{% block heading %}MGT Engenharia{% endblock %}</h1></div>{% if user.is_authenticated %}<div class="user">{{ user.get_username }}</div>{% endif %}</header>
+<main><header><div><small>GESTÃO OPERACIONAL INTEGRADA</small><h1>{% block heading %}MGT Engenharia{% endblock %}</h1></div>{% if user.is_authenticated %}<a class="user user-profile-link" href="{% url 'profile' %}">{% if user.profile.photo %}<img src="{{ user.profile.photo.url }}" alt="Foto do usuário">{% endif %}<span>{{ user.get_full_name|default:user.email|default:user.get_username }}</span></a>{% endif %}</header>
 {% if messages %}{% for message in messages %}<p class="message">{{ message }}</p>{% endfor %}{% endif %}{% block content %}{% endblock %}<footer class="app-footer">By VIA IA © 2026</footer></main></body></html>
