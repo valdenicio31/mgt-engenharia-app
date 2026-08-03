@@ -14,3 +14,7 @@
 - A extensão não lê, resolve ou contorna o CAPTCHA.
 - Os dados são enviados apenas entre o MGT aberto pelo usuário e o portal oficial da Autovistoria.
 - A importação exige uma sessão autenticada no MGT.
+
+
+## Versão 1.0.1
+O robô agora aguarda e seleciona a opção de logradouro oferecida pelo portal. Se o clique automático não for aceito, selecione manualmente a opção; o preenchimento continuará somente após o código interno do logradouro ser registrado.
