@@ -3,21 +3,14 @@
 {% block content %}
 <section class="clients-layout">
   <article class="panel clients-list">
-    <div class="records-heading"><div><h2>🏢 Registros</h2><small>Importe, filtre ou exporte a base de condomínios.</small></div>
+    <div class="records-heading"><div><h2>🏢 Registros</h2><small>Importe, filtre, ordene ou exporte a base de condomínios.</small></div>
       <div class="data-actions">
-        <form id="bulk-opportunities-form" action="{% url 'clients_to_opportunities' %}" method="post" onsubmit="return confirm('Transformar os condomínios selecionados em oportunidades de autovistoria?')">
-          {% csrf_token %}<button type="submit" class="bulk-opportunity-button">🎯 Criar oportunidades</button>
-        </form>
         <form action="{% url 'clients_import' %}" method="post" enctype="multipart/form-data" class="import-form">{% csrf_token %}
           <label class="file-button">📥 Importar arquivo<input type="file" name="file" accept=".xlsx,.csv,.txt,.xml" required onchange="this.form.submit()"></label>
         </form>
-        <details class="export-menu"><summary>📤 Exportar</summary><div>
-          <a href="{% url 'clients_export' 'xlsx' %}">Excel (.xlsx)</a><a href="{% url 'clients_export' 'csv' %}">CSV (.csv)</a>
-          <a href="{% url 'clients_export' 'txt' %}">Texto (.txt)</a><a href="{% url 'clients_export' 'xml' %}">XML (.xml)</a>
-        </div></details>
+        <details class="export-menu"><summary>📤 Exportar</summary><div><a href="{% url 'clients_export' 'xlsx' %}">Excel (.xlsx)</a><a href="{% url 'clients_export' 'csv' %}">CSV (.csv)</a><a href="{% url 'clients_export' 'txt' %}">Texto (.txt)</a><a href="{% url 'clients_export' 'xml' %}">XML (.xml)</a></div></details>
       </div>
     </div>
-
     <form method="get" class="client-filters">
       <input name="q" value="{{ filters.q }}" placeholder="🔎 Nome, CNPJ, rua, processo ou notificação">
       <select name="cidade"><option value="">Todas as cidades</option>{% for value in filters.cities %}<option value="{{ value }}" {% if filters.cidade == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select>
@@ -25,91 +18,31 @@
       <select name="validacao"><option value="">Todas as validações</option><option value="validar" {% if filters.validacao == 'validar' %}selected{% endif %}>Validar</option><option value="confirmado" {% if filters.validacao == 'confirmado' %}selected{% endif %}>Confirmado</option><option value="descartado" {% if filters.validacao == 'descartado' %}selected{% endif %}>Descartado</option></select>
       <button type="submit">🔍 Filtrar</button><a href="{% url 'clients' %}" class="secondary-button">✖ Limpar</a>
     </form>
-    <p class="import-help">Formatos aceitos: Excel, CSV, TXT e XML — limite de 5 MB.</p>
-    <div class="table-scroll">
-      <table>
-        <thead><tr>
-<th class="select-column"><input type="checkbox" id="select-all-clients" aria-label="Selecionar todos os condomínios"></th>
-<th>Foto</th>
-<th><a href="?q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}&ordenar=nome&direcao={% if sort == 'nome' and direction == 'asc' %}desc{% else %}asc{% endif %}">Condomínio {% if sort == 'nome' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
-<th><a href="?q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}&ordenar=rua&direcao={% if sort == 'rua' and direction == 'asc' %}desc{% else %}asc{% endif %}">Rua {% if sort == 'rua' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
-<th><a href="?q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}&ordenar=bairro&direcao={% if sort == 'bairro' and direction == 'asc' %}desc{% else %}asc{% endif %}">Bairro {% if sort == 'bairro' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
-<th><a href="?q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}&ordenar=processo&direcao={% if sort == 'processo' and direction == 'asc' %}desc{% else %}asc{% endif %}">Processo</a></th>
-<th><a href="?q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}&ordenar=notificacao&direcao={% if sort == 'notificacao' and direction == 'asc' %}desc{% else %}asc{% endif %}">Notificação</a></th>
-<th>Validação</th><th><a href="?ordenar=atualizado&direcao={% if sort == 'atualizado' and direction == 'asc' %}desc{% else %}asc{% endif %}">Atualizado</a></th><th>Ações</th></tr></thead>
-        <tbody>
-        {% for item in items %}
-          <tr>
-            <td class="select-column"><input class="client-selector" type="checkbox" name="client_ids" value="{{ item.pk }}" form="bulk-opportunities-form" aria-label="Selecionar {{ item.name }}"></td>
-            <td class="condo-photo-cell">{% if item.photo %}<img src="{{ item.photo.url }}" alt="Foto de {{ item.name }}">{% else %}<span>🏢</span>{% endif %}</td><td><strong>{{ item.name }}</strong></td>
-            <td>{{ item.street|default:"—" }}{% if item.address_number %}, {{ item.address_number }}{% endif %}</td>
-            <td>{{ item.neighborhood|default:"—" }}</td>
-            <td>{{ item.process_number|default:"—" }}</td>
-            <td>{{ item.notification_number|default:"—" }}</td>
-            <td><span class="status status-{{ item.validation }}">{{ item.get_validation_display }}</span></td>
-            <td>{{ item.updated_at|date:'d/m/Y H:i' }}</td>
-            <td class="row-actions"><a class="action-link" href="{% url 'client_autovistoria' item.pk %}">🔎 Autovistoria</a><a class="action-link" href="?editar={{ item.pk }}">✏️ Alterar</a><form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">🗑️ Excluir</button></form></td>
-          </tr>
-        {% empty %}<tr><td colspan="10">Nenhum registro.</td></tr>{% endfor %}
-        </tbody>
-      </table>
-    </div>
+    <p class="import-help">Clique no título das colunas para ordenar. A ordem inicial é Rua → Bairro → Condomínio.</p>
+    <div class="table-scroll"><table><thead><tr>
+      <th>Foto</th>
+      <th><a href="?ordenar=nome&direcao={% if sort == 'nome' and direction == 'asc' %}desc{% else %}asc{% endif %}&q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}">Condomínio {% if sort == 'nome' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
+      <th><a href="?ordenar=rua&direcao={% if sort == 'rua' and direction == 'asc' %}desc{% else %}asc{% endif %}&q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}">Rua {% if sort == 'rua' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
+      <th><a href="?ordenar=bairro&direcao={% if sort == 'bairro' and direction == 'asc' %}desc{% else %}asc{% endif %}&q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}">Bairro {% if sort == 'bairro' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
+      <th><a href="?ordenar=processo&direcao={% if sort == 'processo' and direction == 'asc' %}desc{% else %}asc{% endif %}">Processo {% if sort == 'processo' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
+      <th><a href="?ordenar=notificacao&direcao={% if sort == 'notificacao' and direction == 'asc' %}desc{% else %}asc{% endif %}">Notificação {% if sort == 'notificacao' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a></th>
+      <th>Validação</th><th>Autuações</th><th>Ações</th>
+    </tr></thead><tbody>
+    {% for item in items %}<tr>
+      <td class="condo-photo-cell">{% if item.photo %}<img src="{{ item.photo.url }}" alt="Foto de {{ item.name }}">{% else %}<span>🏢</span>{% endif %}</td>
+      <td><strong>{{ item.name }}</strong></td><td>{{ item.street|default:'—' }}{% if item.address_number %}, {{ item.address_number }}{% endif %}</td><td>{{ item.neighborhood|default:'—' }}</td><td>{{ item.process_number|default:'—' }}</td><td>{{ item.notification_number|default:'—' }}</td><td><span class="status status-{{ item.validation }}">{{ item.get_validation_display }}</span></td><td>{{ item.autovistoria_infractions.count }}</td>
+      <td class="row-actions"><a class="action-link" href="{% url 'client_autovistoria' item.pk %}">🌐 Consultar autuações</a><a class="action-link" href="?editar={{ item.pk }}">✏️ Alterar</a><form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">🗑️ Excluir</button></form></td>
+    </tr>{% empty %}<tr><td colspan="9">Nenhum registro.</td></tr>{% endfor %}
+    </tbody></table></div>
   </article>
-
-  <article class="panel client-form-panel">
-    <h2>{% if editing %}Alterar cliente ou condomínio{% else %}Novo cliente ou condomínio{% endif %}</h2>
-    <form method="post" enctype="multipart/form-data" class="form client-form">{% csrf_token %}
-      {% if form.non_field_errors %}<div class="error">{{ form.non_field_errors }}</div>{% endif %}
-
-      <fieldset><legend>Identificação e contato</legend><div class="form-grid">
-        {% include 'partials/form_field.html' with field=form.photo wide=True %}
-        {% include 'partials/form_field.html' with field=form.name wide=True %}
-        {% include 'partials/form_field.html' with field=form.document %}
-        {% include 'partials/form_field.html' with field=form.phone %}
-        {% include 'partials/form_field.html' with field=form.email wide=True %}
-      </div></fieldset>
-
-      <fieldset><legend>Notificação do Diário Oficial</legend><div class="form-grid">
-        {% include 'partials/form_field.html' with field=form.process_number %}
-        {% include 'partials/form_field.html' with field=form.publication_date %}
-        {% include 'partials/form_field.html' with field=form.notification_number %}
-        {% include 'partials/form_field.html' with field=form.classification %}
-      </div></fieldset>
-
-      <fieldset><legend>Endereço</legend><div class="form-grid address-grid">
-        {% include 'partials/form_field.html' with field=form.street wide=True %}
-        {% include 'partials/form_field.html' with field=form.address_number %}
-        {% include 'partials/form_field.html' with field=form.complement %}
-        {% include 'partials/form_field.html' with field=form.neighborhood %}
-        {% include 'partials/form_field.html' with field=form.city %}
-        {% include 'partials/form_field.html' with field=form.state %}
-        {% include 'partials/form_field.html' with field=form.postal_code %}
-      </div></fieldset>
-
-      <fieldset><legend>Tratamento da notificação</legend><div class="form-grid">
-        {% include 'partials/form_field.html' with field=form.action_description wide=True %}
-        {% include 'partials/form_field.html' with field=form.validation %}
-        <div class="checkbox-field">{{ form.active }} <label for="{{ form.active.id_for_label }}">Registro ativo</label>{{ form.active.errors }}</div>
-      </div></fieldset>
+  <article class="panel client-form-panel"><h2>{% if editing %}Alterar cliente ou condomínio{% else %}Novo cliente ou condomínio{% endif %}</h2>
+    <form method="post" enctype="multipart/form-data" class="form client-form">{% csrf_token %}{% if form.non_field_errors %}<div class="error">{{ form.non_field_errors }}</div>{% endif %}
+      <fieldset><legend>Identificação e contato</legend><div class="form-grid">{% include 'partials/form_field.html' with field=form.photo wide=True %}{% include 'partials/form_field.html' with field=form.name wide=True %}{% include 'partials/form_field.html' with field=form.document %}{% include 'partials/form_field.html' with field=form.phone %}{% include 'partials/form_field.html' with field=form.email wide=True %}</div></fieldset>
+      <fieldset><legend>Notificação do Diário Oficial</legend><div class="form-grid">{% include 'partials/form_field.html' with field=form.process_number %}{% include 'partials/form_field.html' with field=form.publication_date %}{% include 'partials/form_field.html' with field=form.notification_number %}{% include 'partials/form_field.html' with field=form.classification %}</div></fieldset>
+      <fieldset><legend>Endereço</legend><div class="form-grid address-grid">{% include 'partials/form_field.html' with field=form.street wide=True %}{% include 'partials/form_field.html' with field=form.address_number %}{% include 'partials/form_field.html' with field=form.complement %}{% include 'partials/form_field.html' with field=form.neighborhood %}{% include 'partials/form_field.html' with field=form.city %}{% include 'partials/form_field.html' with field=form.state %}{% include 'partials/form_field.html' with field=form.postal_code %}</div></fieldset>
+      <fieldset><legend>Tratamento da notificação</legend><div class="form-grid">{% include 'partials/form_field.html' with field=form.action_description wide=True %}{% include 'partials/form_field.html' with field=form.validation %}<div class="checkbox-field">{{ form.active }} <label for="{{ form.active.id_for_label }}">Registro ativo</label>{{ form.active.errors }}</div></div></fieldset>
       <div class="form-actions"><button type="submit">{% if editing %}💾 Salvar alterações{% else %}💾 Salvar registro{% endif %}</button>{% if editing %}<a class="secondary-button" href="{% url 'clients' %}">✖ Cancelar</a>{% endif %}</div>
     </form>
   </article>
 </section>
-<script>
-  (() => {
-    const selectAll = document.getElementById('select-all-clients');
-    const selectors = [...document.querySelectorAll('.client-selector')];
-    if (!selectAll) return;
-    const refresh = () => {
-      const selected = selectors.filter((item) => item.checked).length;
-      selectAll.checked = selectors.length > 0 && selected === selectors.length;
-      selectAll.indeterminate = selected > 0 && selected < selectors.length;
-    };
-    selectAll.addEventListener('change', () => {
-      selectors.forEach((item) => { item.checked = selectAll.checked; });
-      refresh();
-    });
-    selectors.forEach((item) => item.addEventListener('change', refresh));
-  })();
-</script>
 {% endblock %}

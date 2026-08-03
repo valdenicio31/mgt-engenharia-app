@@ -220,29 +220,6 @@ def client_autovistoria(request, pk):
             with transaction.atomic():
                 infraction = form.save(commit=False)
                 infraction.client = client
-                opportunity = Opportunity.objects.filter(
-                    client=client, source="Autovistoria Rio"
-                ).order_by("pk").first()
-                created = opportunity is None
-                if created:
-                    opportunity = Opportunity(
-                        client=client,
-                        source="Autovistoria Rio",
-                        owner=request.user,
-                        title=_automatic_opportunity_title(client),
-                        stage="lead",
-                        estimated_value=0,
-                    )
-                if not opportunity.owner_id:
-                    opportunity.owner = request.user
-                opportunity.communication_number = infraction.communication_number
-                opportunity.consultation_status = infraction.get_status_display()
-                opportunity.consultation_notes = infraction.description
-                opportunity.consultation_address = _client_consultation_address(client)
-                opportunity.source_url = infraction.source_url or portal_url
-                opportunity.consulted_at = timezone.now()
-                opportunity.save()
-                infraction.opportunity = opportunity
                 finding = client.gazette_findings.order_by("-publication_date").first()
                 if finding:
                     infraction.gazette_finding = finding
@@ -261,17 +238,18 @@ def client_autovistoria(request, pk):
                     details={
                         "cliente": client.name,
                         "autuacao": infraction.infraction_number,
-                        "oportunidade": opportunity.pk,
-                        "oportunidade_criada": created,
+                        "etapa": "autuacao_registrada_aguardando_oportunidade",
                     },
                 )
             messages.success(
-                request, "Autuação gravada e vinculada à oportunidade comercial."
+                request,
+                "Autuação registrada. Inclua todas as demais autuações encontradas e, ao final, gere a oportunidade.",
             )
             return redirect("client_autovistoria", pk=client.pk)
     infractions = client.autovistoria_infractions.select_related(
         "opportunity", "gazette_finding"
     ).all()
+    pending_infractions = infractions.filter(opportunity__isnull=True)
     return render(
         request,
         "client_autovistoria.html",
@@ -281,9 +259,58 @@ def client_autovistoria(request, pk):
             "portal_url": portal_url,
             "consultation_address": _client_consultation_address(client),
             "infractions": infractions,
+            "pending_infractions_count": pending_infractions.count(),
         },
     )
 
+
+@login_required
+@require_POST
+def client_autovistoria_create_opportunity(request, pk):
+    client = get_object_or_404(Client, pk=pk, active=True)
+    pending = list(client.autovistoria_infractions.filter(opportunity__isnull=True))
+    if not pending:
+        messages.warning(request, "Nenhuma autuação nova foi registrada. Consulte o portal e importe ao menos uma autuação antes de gerar a oportunidade.")
+        return redirect("client_autovistoria", pk=client.pk)
+
+    with transaction.atomic():
+        opportunity = Opportunity.objects.filter(client=client, source="Autovistoria Rio").order_by("pk").first()
+        created = opportunity is None
+        if created:
+            opportunity = Opportunity(
+                client=client,
+                source="Autovistoria Rio",
+                owner=request.user,
+                title=_automatic_opportunity_title(client),
+                stage="lead",
+                estimated_value=0,
+            )
+        if not opportunity.owner_id:
+            opportunity.owner = request.user
+        latest = pending[-1]
+        opportunity.communication_number = latest.communication_number or client.notification_number
+        opportunity.consultation_status = "; ".join(sorted({item.get_status_display() for item in pending}))
+        opportunity.consultation_notes = "\n\n".join(
+            f"Autuação {item.infraction_number}: {item.description}" for item in pending
+        )
+        opportunity.consultation_address = _client_consultation_address(client)
+        opportunity.source_url = latest.source_url or "https://autovistoria.rio.rj.gov.br/ConsultaPublica.php"
+        opportunity.consulted_at = timezone.now()
+        opportunity.save()
+        AutovistoriaInfraction.objects.filter(pk__in=[item.pk for item in pending]).update(opportunity=opportunity)
+        AuditLog.objects.create(
+            actor=request.user,
+            action="oportunidade_criada_a_partir_de_autuacoes",
+            entity="Opportunity",
+            entity_id=str(opportunity.pk),
+            details={
+                "cliente": client.name,
+                "autuacoes": [item.infraction_number for item in pending],
+                "oportunidade_criada": created,
+            },
+        )
+    messages.success(request, f"Oportunidade {'criada' if created else 'atualizada'} com {len(pending)} autuação(ões).")
+    return redirect("opportunities")
 
 def _automatic_opportunity_title(client):
     return f"Autovistoria — {client.name}"
@@ -292,46 +319,15 @@ def _automatic_opportunity_title(client):
 @login_required
 @require_POST
 def clients_to_opportunities(request):
-    selected_ids = list(dict.fromkeys(request.POST.getlist("client_ids")))
-    if not selected_ids:
-        messages.warning(request, "Selecione pelo menos um condomínio para transformar em oportunidade.")
-        return redirect("clients")
-
-    clients_by_id = {
-        str(client.pk): client
-        for client in Client.objects.filter(pk__in=selected_ids, active=True)
-    }
-    created = skipped = 0
-    created_ids = []
-    with transaction.atomic():
-        for client_id in selected_ids:
-            client = clients_by_id.get(client_id)
-            if not client:
-                skipped += 1
-                continue
-            opportunity, was_created = Opportunity.objects.get_or_create(
-                client=client,
-                title=_automatic_opportunity_title(client),
-                defaults={"stage": "lead", "estimated_value": 0, "owner": request.user},
-            )
-            if was_created:
-                created += 1
-                created_ids.append(opportunity.pk)
-            else:
-                skipped += 1
-
-        AuditLog.objects.create(
-            actor=request.user,
-            action="clientes_para_oportunidades",
-            entity="Opportunity",
-            entity_id=",".join(str(pk) for pk in created_ids) or "nenhuma",
-            details={"selecionados": len(selected_ids), "criados": created, "ignorados": skipped},
-        )
-
-    messages.success(request, f"{created} oportunidade(s) criada(s) com sucesso.")
-    if skipped:
-        messages.info(request, f"{skipped} registro(s) foram ignorados por já existirem ou estarem inativos.")
-    return redirect("opportunities" if created else "clients")
+    # Na versão 1.0, oportunidades de Autovistoria só podem nascer depois da
+    # consulta ao portal e do registro de pelo menos uma autuação. Mantemos a
+    # rota para compatibilidade com links antigos, mas bloqueamos o atalho.
+    messages.warning(
+        request,
+        "A criação direta foi desativada. Abra o condomínio, consulte a Autovistoria, "
+        "registre todos os itens autuados e só então gere a oportunidade.",
+    )
+    return redirect("clients")
 
 CRUD_MODELS = {"clientes": Client, "oportunidades": Opportunity, "propostas": Proposal, "projetos": Project, "tarefas": Task}
 
@@ -422,8 +418,15 @@ def opportunities(request): return _crud(request, Opportunity, OpportunityForm, 
 
 @login_required
 def opportunity_letter(request, pk):
-    opportunity = get_object_or_404(Opportunity.objects.select_related("client", "owner"), pk=pk)
-    return render(request, "opportunity_letter.html", {"opportunity": opportunity})
+    opportunity = get_object_or_404(
+        Opportunity.objects.select_related("client", "owner").prefetch_related("infractions"),
+        pk=pk,
+    )
+    return render(
+        request,
+        "opportunity_letter.html",
+        {"opportunity": opportunity, "infractions": opportunity.infractions.all()},
+    )
 @login_required
 def projects(request): return _crud(request, Project, ProjectForm, "Projetos")
 @login_required
