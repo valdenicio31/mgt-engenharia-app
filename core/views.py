@@ -7,6 +7,7 @@ from django.core.mail import send_mail
 from django.db import connection, transaction
 from django.db.models import Count, Q
 import csv
+import json
 import io
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
@@ -263,6 +264,112 @@ def client_autovistoria(request, pk):
             "pending_infractions_count": pending_infractions.count(),
         },
     )
+
+
+@login_required
+@require_POST
+def client_autovistoria_robot_import(request, pk):
+    """Recebe os comunicados lidos pela extensão do Chrome.
+
+    O CAPTCHA permanece sob responsabilidade do usuário. A extensão apenas
+    preenche os campos e, depois da consulta manual, envia a tabela exibida.
+    """
+    client = get_object_or_404(Client, pk=pk, active=True)
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return JsonResponse({"ok": False, "error": "Conteúdo JSON inválido."}, status=400)
+
+    rows = payload.get("items")
+    if not isinstance(rows, list) or not rows:
+        return JsonResponse({"ok": False, "error": "Nenhum comunicado foi recebido."}, status=400)
+    if len(rows) > 200:
+        return JsonResponse({"ok": False, "error": "A consulta excedeu o limite de 200 itens."}, status=400)
+
+    created = 0
+    skipped = 0
+    errors = []
+    finding = client.gazette_findings.order_by("-publication_date").first()
+    imported_ids = []
+
+    with transaction.atomic():
+        for position, raw in enumerate(rows, start=1):
+            if not isinstance(raw, dict):
+                errors.append(f"Linha {position}: formato inválido.")
+                continue
+            communication = str(raw.get("communication_number") or "").strip()[:50]
+            infraction_number = str(raw.get("infraction_number") or communication).strip()[:80]
+            infraction_type = str(raw.get("infraction_type") or "").strip()[:180]
+            complement = str(raw.get("complement") or "").strip()
+            notes = str(raw.get("notes") or "").strip()
+            date_text = str(raw.get("infraction_date") or "").strip()
+            if not infraction_number:
+                errors.append(f"Linha {position}: comunicado sem identificação.")
+                continue
+
+            infraction_date = None
+            for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d"):
+                try:
+                    infraction_date = datetime.strptime(date_text, fmt).date() if date_text else None
+                    break
+                except ValueError:
+                    continue
+
+            description_parts = []
+            if infraction_type:
+                description_parts.append(infraction_type)
+            if complement and complement not in {"-", "--"}:
+                description_parts.append(f"Complemento/unidade: {complement}")
+            if notes and notes not in {"-", "--"}:
+                description_parts.append(f"Observação: {notes}")
+            description = ". ".join(description_parts) or "Comunicado identificado no portal da Autovistoria."
+
+            if AutovistoriaInfraction.objects.filter(client=client, infraction_number__iexact=infraction_number).exists():
+                skipped += 1
+                continue
+
+            item = AutovistoriaInfraction.objects.create(
+                client=client,
+                gazette_finding=finding,
+                communication_number=communication,
+                infraction_number=infraction_number,
+                infraction_type=infraction_type,
+                description=description,
+                infraction_date=infraction_date,
+                status="ativa",
+                source_url="https://autovistoria.rio.rj.gov.br/ConsultaPublica.php",
+            )
+            imported_ids.append(item.pk)
+            created += 1
+
+        if created:
+            last_communication = next((str(r.get("communication_number") or "").strip() for r in reversed(rows) if isinstance(r, dict) and r.get("communication_number")), "")
+            if last_communication and not client.notification_number:
+                client.notification_number = last_communication[:50]
+                client.save(update_fields=("notification_number", "updated_at"))
+
+        AuditLog.objects.create(
+            actor=request.user,
+            action="autuacoes_importadas_pelo_robo_assistido",
+            entity="Client",
+            entity_id=str(client.pk),
+            details={
+                "cliente": client.name,
+                "incluidas": created,
+                "duplicadas": skipped,
+                "erros": errors[:20],
+                "ids": imported_ids,
+                "captcha": "preenchido_manualmente_pelo_usuario",
+            },
+        )
+
+    return JsonResponse({
+        "ok": True,
+        "created": created,
+        "skipped": skipped,
+        "errors": errors,
+        "message": f"{created} comunicado(s) importado(s); {skipped} duplicado(s) ignorado(s).",
+    })
 
 
 @login_required

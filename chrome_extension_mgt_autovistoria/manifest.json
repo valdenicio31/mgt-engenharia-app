@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "MGT Autovistoria Assistida",
+  "version": "1.0.0",
+  "description": "Preenche a consulta da Autovistoria campo a campo, aguarda o CAPTCHA e importa os comunicados para o MGT.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": [
+    "https://autovistoria.rio.rj.gov.br/*",
+    "https://mgt-engenharia-homologacao.onrender.com/*",
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*"
+  ],
+  "background": {"service_worker": "background.js"},
+  "content_scripts": [
+    {
+      "matches": ["https://mgt-engenharia-homologacao.onrender.com/*", "http://localhost:*/*", "http://127.0.0.1:*/*"],
+      "js": ["mgt-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://autovistoria.rio.rj.gov.br/*"],
+      "js": ["portal-content.js"],
+      "css": ["portal.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {"default_title": "MGT Autovistoria Assistida"}
+}
