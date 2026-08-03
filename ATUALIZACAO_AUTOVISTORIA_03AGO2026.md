@@ -11,6 +11,7 @@
 - Registro da origem como Landing Page, com data e hora.
 - Importador otimizado com análise de duplicidade em memória e gravação em lotes.
 - Compatibilidade com datas no formato `2026-07-01 04:00:00`.
+- Migração de união `0010` para compatibilidade com as atualizações de tarefas já existentes no repositório.
 
 ## Render
 
