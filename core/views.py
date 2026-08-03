@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth import login
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db import connection
 import csv
@@ -12,10 +13,10 @@ from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
-from .forms import ClientForm, FirstAccessForm, OpportunityForm, ProjectForm, ProposalForm, TaskForm, UserProfileForm
+from .forms import ClientForm, FirstAccessForm, LandingContactForm, OpportunityForm, ProjectForm, ProposalForm, RATForm, TaskForm, UserProfileForm
 from .client_io import export_clients, import_clients
 from .gazette import fetch_notifications
-from .models import AuditLog, Client, GazetteFinding, Opportunity, Project, Proposal, RAT, Task
+from .models import AuditLog, Client, GazetteFinding, Opportunity, Project, Proposal, RAT, RATRevision, Task
 from .models import UserProfile
 
 def health(request):
@@ -25,7 +26,23 @@ def health(request):
     return JsonResponse({"status": "ok", "service": "mgt-engenharia"})
 
 def landing_page(request):
-    return render(request, "landing_page.html", {"contact_email": settings.MGT_CONTACT_EMAIL, "whatsapp": settings.MGT_WHATSAPP})
+    form = LandingContactForm(request.POST or None)
+    sent = False
+    if request.method == "POST" and form.is_valid():
+        data = form.cleaned_data
+        client, _ = Client.objects.get_or_create(
+            email__iexact=data["email"],
+            defaults={"name": data["condominium"], "email": data["email"], "phone": data["phone"], "action_description": f"Contato: {data['name']} — origem: Landing Page"},
+        )
+        if not client.phone:
+            client.phone = data["phone"]; client.save(update_fields=("phone", "updated_at"))
+        owner = get_user_model().objects.filter(is_superuser=True).first() or get_user_model().objects.first()
+        if owner:
+            Opportunity.objects.create(client=client, title=data["service"], owner=owner, source="landing_page")
+            AuditLog.objects.create(actor=None, action="lead_landing_page", entity="Opportunity", entity_id=str(client.pk), details={"contato": data["name"], "consentimento": True})
+            sent = True
+            form = LandingContactForm()
+    return render(request, "landing_page.html", {"contact_email": settings.MGT_CONTACT_EMAIL, "whatsapp": settings.MGT_WHATSAPP, "form": form, "sent": sent})
 
 def first_access(request):
     if request.user.is_authenticated:
@@ -91,7 +108,7 @@ def _crud(request, model, form_class, title, template="generic_list.html"):
 @login_required
 def clients(request): return _crud(request, Client, ClientForm, "Clientes e condomínios", "clients.html")
 
-CRUD_MODELS = {"clientes": Client, "oportunidades": Opportunity, "propostas": Proposal, "projetos": Project, "tarefas": Task}
+CRUD_MODELS = {"clientes": Client, "oportunidades": Opportunity, "propostas": Proposal, "projetos": Project, "tarefas": Task, "rats": RAT}
 
 @login_required
 @require_POST
@@ -198,9 +215,34 @@ def tasks(request): return _crud(request, Task, TaskForm, "Tarefas")
 @login_required
 def proposals(request): return _crud(request, Proposal, ProposalForm, "Propostas")
 
+def _rat_snapshot(rat):
+    return {"project": str(rat.project), "service_date": rat.service_date.isoformat(), "start_time": str(rat.start_time or ""), "end_time": str(rat.end_time or ""), "total_hours": str(rat.total_hours), "description": rat.description, "notes": rat.notes, "next_steps": rat.next_steps, "status": rat.status, "approved_by_client": rat.approved_by_client}
+
 @login_required
 def rats(request):
-    return render(request, "simple_list.html", {"title": "RAT — Relatórios de Atendimento", "items": RAT.objects.select_related("project")[:50]})
+    edit_id = request.GET.get("editar")
+    instance = get_object_or_404(RAT, pk=edit_id) if edit_id else None
+    original_snapshot = _rat_snapshot(instance) if instance else None
+    initial = {"service_date": datetime.now().date(), "status": "rascunho"}
+    if request.GET.get("gerar") == "hoje" and request.GET.get("projeto"):
+        project = get_object_or_404(Project, pk=request.GET["projeto"])
+        tasks = project.tasks.filter(completed=True, updated_at__date=datetime.now().date())
+        initial.update({"project": project, "description": "\n".join(f"• {task.title}" for task in tasks) or "Atividades realizadas no atendimento do dia."})
+    form = RATForm(request.POST or None, instance=instance, initial=initial if not instance else None)
+    if request.method == "POST" and form.is_valid():
+        rat = form.save(commit=False); rat.technician = instance.technician if instance else request.user
+        if instance:
+            RATRevision.objects.create(rat=instance, version=instance.version, snapshot=original_snapshot, changed_by=request.user)
+            rat.version += 1
+        rat.save()
+        AuditLog.objects.create(actor=request.user, action="rat_alterada" if instance else "rat_gerada", entity="RAT", entity_id=str(rat.pk), details={"versao": rat.version})
+        messages.success(request, "RAT atualizada com nova versão." if instance else "RAT do dia gerada com sucesso.")
+        return redirect("rats")
+    return render(request, "rats.html", {"title": "RAT — Relatórios de Atendimento", "items": RAT.objects.select_related("project", "technician").order_by("-service_date", "-created_at")[:100], "form": form, "editing": instance, "projects": Project.objects.all()})
+
+@login_required
+def rat_document(request, pk):
+    return render(request, "rat_document.html", {"rat": get_object_or_404(RAT.objects.select_related("project__client", "technician"), pk=pk)})
 
 @login_required
 def gazette_findings(request):

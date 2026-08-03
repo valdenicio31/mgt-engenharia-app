@@ -15,6 +15,10 @@ Entrega da Fase 22 que consolida o protótipo homologado em uma aplicação Djan
 - exportação por registros selecionados ou por todos os registros;
 - carta comercial com valores, serviços, logotipo e envio por e-mail/WhatsApp;
 - Landing Page pública da MGT em `/apresentacao/`.
+- Landing Page com formulário que cria cliente e oportunidade automaticamente;
+- botões globais Voltar e Avançar;
+- carta assinada por Márcio Guimarães;
+- RAT do dia com cálculo de horas, alteração versionada, exclusão, auditoria e documento para impressão/PDF.
 
 ## Execução local
 

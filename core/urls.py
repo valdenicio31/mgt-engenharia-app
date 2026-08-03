@@ -19,5 +19,6 @@ urlpatterns = [
     path("projetos/", views.projects, name="projects"),
     path("tarefas/", views.tasks, name="tasks"),
     path("rats/", views.rats, name="rats"),
+    path("rats/<int:pk>/documento/", views.rat_document, name="rat_document"),
     path("diario-oficial/", views.gazette_findings, name="gazette_findings"),
 ]

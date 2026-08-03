@@ -4,7 +4,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.db import transaction
-from .models import Client, Opportunity, Project, Proposal, Task, UserProfile
+from .models import Client, Opportunity, Project, Proposal, RAT, Task, UserProfile
 
 class EmailCPFAuthenticationForm(AuthenticationForm):
     username = forms.CharField(label="E-mail ou CPF", widget=forms.TextInput(attrs={"autofocus": True, "autocomplete": "username"}))
@@ -150,6 +150,14 @@ class OpportunityForm(forms.ModelForm):
         model = Opportunity
         fields = ("client", "title", "stage", "estimated_value")
 
+class LandingContactForm(forms.Form):
+    name = forms.CharField(label="Nome", max_length=160)
+    condominium = forms.CharField(label="Condomínio", max_length=160)
+    email = forms.EmailField(label="E-mail")
+    phone = forms.CharField(label="WhatsApp", max_length=30)
+    service = forms.CharField(label="Serviço de interesse", max_length=180)
+    consent = forms.BooleanField(label="Autorizo o contato da MGT Engenharia e o tratamento destes dados para atendimento.")
+
 class ProposalForm(forms.ModelForm):
     class Meta:
         model = Proposal
@@ -166,3 +174,13 @@ class TaskForm(forms.ModelForm):
         model = Task
         fields = ("project", "title", "due_date", "completed")
         widgets = {"due_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")}
+
+class RATForm(forms.ModelForm):
+    class Meta:
+        model = RAT
+        fields = ("project", "service_date", "start_time", "end_time", "description", "notes", "next_steps", "status", "approved_by_client")
+        widgets = {
+            "service_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "start_time": forms.TimeInput(attrs={"type": "time"}), "end_time": forms.TimeInput(attrs={"type": "time"}),
+            "description": forms.Textarea(attrs={"rows": 7}), "notes": forms.Textarea(attrs={"rows": 3}), "next_steps": forms.Textarea(attrs={"rows": 3}),
+        }
