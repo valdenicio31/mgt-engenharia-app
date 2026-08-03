@@ -3,36 +3,44 @@
 {% block content %}
 <section class="clients-layout">
   <article class="panel clients-list">
-    <div class="records-heading"><div><h2>Registros</h2><small>Importe ou exporte a base de condomínios.</small></div>
+    <div class="records-heading"><div><h2>🏢 Registros</h2><small>Importe, filtre ou exporte a base de condomínios.</small></div>
       <div class="data-actions">
         <form id="bulk-opportunities-form" action="{% url 'clients_to_opportunities' %}" method="post" onsubmit="return confirm('Transformar os condomínios selecionados em oportunidades de autovistoria?')">
-          {% csrf_token %}<button type="submit" class="bulk-opportunity-button">Criar oportunidades</button>
+          {% csrf_token %}<button type="submit" class="bulk-opportunity-button">🎯 Criar oportunidades</button>
         </form>
         <form action="{% url 'clients_import' %}" method="post" enctype="multipart/form-data" class="import-form">{% csrf_token %}
-          <label class="file-button">Importar arquivo<input type="file" name="file" accept=".xlsx,.csv,.txt,.xml" required onchange="this.form.submit()"></label>
+          <label class="file-button">📥 Importar arquivo<input type="file" name="file" accept=".xlsx,.csv,.txt,.xml" required onchange="this.form.submit()"></label>
         </form>
-        <details class="export-menu"><summary>Exportar</summary><div>
+        <details class="export-menu"><summary>📤 Exportar</summary><div>
           <a href="{% url 'clients_export' 'xlsx' %}">Excel (.xlsx)</a><a href="{% url 'clients_export' 'csv' %}">CSV (.csv)</a>
           <a href="{% url 'clients_export' 'txt' %}">Texto (.txt)</a><a href="{% url 'clients_export' 'xml' %}">XML (.xml)</a>
         </div></details>
       </div>
     </div>
+
+    <form method="get" class="client-filters">
+      <input name="q" value="{{ filters.q }}" placeholder="🔎 Nome, CNPJ, rua, processo ou notificação">
+      <select name="cidade"><option value="">Todas as cidades</option>{% for value in filters.cities %}<option value="{{ value }}" {% if filters.cidade == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select>
+      <select name="bairro"><option value="">Todos os bairros</option>{% for value in filters.neighborhoods %}<option value="{{ value }}" {% if filters.bairro == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select>
+      <select name="validacao"><option value="">Todas as validações</option><option value="validar" {% if filters.validacao == 'validar' %}selected{% endif %}>Validar</option><option value="confirmado" {% if filters.validacao == 'confirmado' %}selected{% endif %}>Confirmado</option><option value="descartado" {% if filters.validacao == 'descartado' %}selected{% endif %}>Descartado</option></select>
+      <button type="submit">🔍 Filtrar</button><a href="{% url 'clients' %}" class="secondary-button">✖ Limpar</a>
+    </form>
     <p class="import-help">Formatos aceitos: Excel, CSV, TXT e XML — limite de 5 MB.</p>
     <div class="table-scroll">
       <table>
-        <thead><tr><th class="select-column"><input type="checkbox" id="select-all-clients" aria-label="Selecionar todos os condomínios"></th><th>Condomínio</th><th>Processo</th><th>Notificação</th><th>Validação</th><th>Atualizado</th><th>Ações</th></tr></thead>
+        <thead><tr><th class="select-column"><input type="checkbox" id="select-all-clients" aria-label="Selecionar todos os condomínios"></th><th>Foto</th><th>Condomínio</th><th>Processo</th><th>Notificação</th><th>Validação</th><th>Atualizado</th><th>Ações</th></tr></thead>
         <tbody>
         {% for item in items %}
           <tr>
             <td class="select-column"><input class="client-selector" type="checkbox" name="client_ids" value="{{ item.pk }}" form="bulk-opportunities-form" aria-label="Selecionar {{ item.name }}"></td>
-            <td><strong>{{ item.name }}</strong><small>{{ item.street }}{% if item.address_number %}, {{ item.address_number }}{% endif %}{% if item.neighborhood %} — {{ item.neighborhood }}{% endif %}</small></td>
+            <td class="condo-photo-cell">{% if item.photo %}<img src="{{ item.photo.url }}" alt="Foto de {{ item.name }}">{% else %}<span>🏢</span>{% endif %}</td><td><strong>{{ item.name }}</strong><small>{{ item.street }}{% if item.address_number %}, {{ item.address_number }}{% endif %}{% if item.neighborhood %} — {{ item.neighborhood }}{% endif %}</small></td>
             <td>{{ item.process_number|default:"—" }}</td>
             <td>{{ item.notification_number|default:"—" }}</td>
             <td><span class="status status-{{ item.validation }}">{{ item.get_validation_display }}</span></td>
             <td>{{ item.updated_at|date:'d/m/Y H:i' }}</td>
-            <td class="row-actions"><a class="action-link" href="?editar={{ item.pk }}">Alterar</a><form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">Excluir</button></form></td>
+            <td class="row-actions"><a class="action-link" href="?editar={{ item.pk }}">✏️ Alterar</a><form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">🗑️ Excluir</button></form></td>
           </tr>
-        {% empty %}<tr><td colspan="7">Nenhum registro.</td></tr>{% endfor %}
+        {% empty %}<tr><td colspan="8">Nenhum registro.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
@@ -40,10 +48,11 @@
 
   <article class="panel client-form-panel">
     <h2>{% if editing %}Alterar cliente ou condomínio{% else %}Novo cliente ou condomínio{% endif %}</h2>
-    <form method="post" class="form client-form">{% csrf_token %}
+    <form method="post" enctype="multipart/form-data" class="form client-form">{% csrf_token %}
       {% if form.non_field_errors %}<div class="error">{{ form.non_field_errors }}</div>{% endif %}
 
       <fieldset><legend>Identificação e contato</legend><div class="form-grid">
+        {% include 'partials/form_field.html' with field=form.photo wide=True %}
         {% include 'partials/form_field.html' with field=form.name wide=True %}
         {% include 'partials/form_field.html' with field=form.document %}
         {% include 'partials/form_field.html' with field=form.phone %}
@@ -72,7 +81,7 @@
         {% include 'partials/form_field.html' with field=form.validation %}
         <div class="checkbox-field">{{ form.active }} <label for="{{ form.active.id_for_label }}">Registro ativo</label>{{ form.active.errors }}</div>
       </div></fieldset>
-      <div class="form-actions"><button type="submit">{% if editing %}Salvar alterações{% else %}Salvar registro{% endif %}</button>{% if editing %}<a class="secondary-button" href="{% url 'clients' %}">Cancelar</a>{% endif %}</div>
+      <div class="form-actions"><button type="submit">{% if editing %}💾 Salvar alterações{% else %}💾 Salvar registro{% endif %}</button>{% if editing %}<a class="secondary-button" href="{% url 'clients' %}">✖ Cancelar</a>{% endif %}</div>
     </form>
   </article>
 </section>

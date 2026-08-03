@@ -46,7 +46,7 @@ class ClientForm(forms.ModelForm):
     class Meta:
         model = Client
         fields = (
-            "name", "document", "email", "phone",
+            "photo", "name", "document", "email", "phone",
             "process_number", "publication_date", "notification_number",
             "street", "address_number", "complement", "neighborhood",
             "city", "state", "postal_code", "classification",
@@ -58,6 +58,12 @@ class ClientForm(forms.ModelForm):
             "state": forms.TextInput(attrs={"maxlength": 2, "style": "text-transform:uppercase"}),
             "postal_code": forms.TextInput(attrs={"placeholder": "00000-000"}),
         }
+
+    def clean_photo(self):
+        photo = self.cleaned_data.get("photo")
+        if photo and getattr(photo, "size", 0) > 5 * 1024 * 1024:
+            raise forms.ValidationError("A foto do condomínio deve ter no máximo 5 MB.")
+        return photo
 
     def clean(self):
         cleaned = super().clean()

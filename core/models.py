@@ -57,6 +57,7 @@ class Client(Timestamped):
         ("descartado", "Descartado"),
     ]
     name = models.CharField("nome", max_length=160)
+    photo = models.ImageField("foto do condomínio", upload_to="condominiums/", blank=True)
     document = models.CharField("CNPJ/CPF", max_length=20, blank=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=30, blank=True)

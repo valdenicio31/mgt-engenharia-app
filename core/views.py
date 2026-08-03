@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db import connection, transaction
+from django.db.models import Count, Q
 import csv
 import io
 import xml.etree.ElementTree as ET
@@ -102,13 +103,23 @@ def first_access(request):
 
 @login_required
 def dashboard(request):
+    location = (request.GET.get("local") or "").strip()
+    clients_qs = Client.objects.filter(active=True)
+    if location:
+        clients_qs = clients_qs.filter(
+            Q(street__icontains=location) | Q(neighborhood__icontains=location) | Q(city__icontains=location)
+        )
     context = {
-        "clients": Client.objects.filter(active=True).count(),
+        "clients": clients_qs.count(),
         "opportunities": Opportunity.objects.exclude(stage__in=["ganha", "perdida"]).count(),
         "projects": Project.objects.filter(status="em_execucao").count(),
         "pending_tasks": Task.objects.filter(completed=False).count(),
         "pipeline": Opportunity.objects.select_related("client", "owner").order_by("-updated_at")[:6],
         "recent_projects": Project.objects.select_related("client", "manager").order_by("-updated_at")[:5],
+        "location_filter": location,
+        "by_street": clients_qs.exclude(street="").values("street").annotate(total=Count("id")).order_by("-total", "street")[:10],
+        "by_neighborhood": clients_qs.exclude(neighborhood="").values("neighborhood").annotate(total=Count("id")).order_by("-total", "neighborhood")[:10],
+        "by_city": clients_qs.exclude(city="").values("city").annotate(total=Count("id")).order_by("-total", "city")[:10],
     }
     return render(request, "dashboard.html", context)
 
@@ -126,7 +137,7 @@ def profile(request):
 def _crud(request, model, form_class, title, template="generic_list.html"):
     edit_id = request.GET.get("editar")
     instance = get_object_or_404(model, pk=edit_id) if edit_id else None
-    form = form_class(request.POST or None, instance=instance)
+    form = form_class(request.POST or None, request.FILES or None, instance=instance)
     if request.method == "POST" and form.is_valid():
         obj = form.save(commit=False)
         if hasattr(obj, "owner_id") and not obj.owner_id: obj.owner = request.user
@@ -138,7 +149,27 @@ def _crud(request, model, form_class, title, template="generic_list.html"):
         messages.success(request, "Registro atualizado com sucesso." if instance else "Registro criado com sucesso.")
         return redirect(request.path)
     resource = {Client: "clientes", Opportunity: "oportunidades", Proposal: "propostas", Project: "projetos", Task: "tarefas"}[model]
-    return render(request, template, {"title": title, "items": model.objects.all().order_by("-updated_at")[:50], "form": form, "editing": instance, "resource": resource})
+    items = model.objects.all().order_by("-updated_at")
+    filters = {}
+    if model is Client:
+        search = (request.GET.get("q") or "").strip()
+        city = (request.GET.get("cidade") or "").strip()
+        neighborhood = (request.GET.get("bairro") or "").strip()
+        validation = (request.GET.get("validacao") or "").strip()
+        if search:
+            items = items.filter(Q(name__icontains=search) | Q(document__icontains=search) | Q(street__icontains=search) | Q(process_number__icontains=search) | Q(notification_number__icontains=search))
+        if city:
+            items = items.filter(city__iexact=city)
+        if neighborhood:
+            items = items.filter(neighborhood__iexact=neighborhood)
+        if validation:
+            items = items.filter(validation=validation)
+        filters = {
+            "q": search, "cidade": city, "bairro": neighborhood, "validacao": validation,
+            "cities": Client.objects.exclude(city="").values_list("city", flat=True).distinct().order_by("city"),
+            "neighborhoods": Client.objects.exclude(neighborhood="").values_list("neighborhood", flat=True).distinct().order_by("neighborhood"),
+        }
+    return render(request, template, {"title": title, "items": items[:100], "form": form, "editing": instance, "resource": resource, "filters": filters})
 
 @login_required
 def clients(request): return _crud(request, Client, ClientForm, "Clientes e condomínios", "clients.html")
