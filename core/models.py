@@ -47,7 +47,6 @@ class GazetteFinding(Timestamped):
         return f"{self.condominium_name} — {self.notification_number}"
 
 class Client(Timestamped):
-    ORIGINS = [("manual", "Digitado manualmente"), ("arquivo", "Importado por arquivo"), ("diario_oficial", "Importado do Diário Oficial")]
     CLASSIFICATIONS = [
         ("autovistoria", "Autovistoria explícita"),
         ("manutencao_predial", "Fiscalização de Manutenção Predial"),
@@ -59,7 +58,6 @@ class Client(Timestamped):
         ("descartado", "Descartado"),
     ]
     name = models.CharField("nome", max_length=160)
-    origin = models.CharField("origem do cadastro", max_length=30, choices=ORIGINS, default="manual", db_index=True)
     photo = models.ImageField("foto do condomínio", upload_to="condominiums/", blank=True)
     document = models.CharField("CNPJ/CPF", max_length=20, blank=True)
     email = models.EmailField(blank=True)

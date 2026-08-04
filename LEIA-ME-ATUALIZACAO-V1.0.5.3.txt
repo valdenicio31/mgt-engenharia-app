@@ -1,0 +1,30 @@
+MGT v1.0.5.3 - CORRECAO DA ARVORE DE MIGRATIONS
+
+Este pacote foi montado sobre o projeto Django completo enviado em
+MGTAtualizacaoTelaClientesFiltrosExcelV1_0_03Ago2026(1).zip.
+
+CORRECAO REALIZADA
+- Restaurado o arquivo ausente:
+  core/migrations/0009_task_end_time_task_execution_date_task_planned_hours_and_more.py
+- A migration restaurada depende de core.0007_landinglead e nao executa alteracoes
+  no banco. Ela recompõe o no historico exigido pela migration 0010.
+- Nenhum dado e apagado e nenhuma migration aplicada e reescrita.
+
+INSTALACAO RECOMENDADA
+1. Extraia o ZIP em uma pasta nova.
+2. Para testar a copia completa, execute INSTALAR_ATUALIZACAO_MGT_V1_0_5_3.bat
+   na propria raiz extraida.
+3. Para atualizar outro projeto instalado, execute o mesmo BAT e informe a pasta
+   que contem manage.py.
+4. Consulte os logs criados em <projeto>\logs.
+
+VALIDACOES DO INSTALADOR
+- manage.py check
+- showmigrations core
+- migrate --plan
+- migrate
+- collectstatic --noinput
+
+IMPORTANTE
+O instalador usa primeiro .venv\Scripts\python.exe, quando existente.
+Caso contrario, tenta 'py' e depois 'python'.

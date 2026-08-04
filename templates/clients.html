@@ -36,14 +36,14 @@
       <th class="excel-filter-column" data-filter-column="neighborhood"><div class="column-heading"><a href="?ordenar=bairro&direcao={% if sort == 'bairro' and direction == 'asc' %}desc{% else %}asc{% endif %}&q={{ filters.q|urlencode }}&cidade={{ filters.cidade|urlencode }}&bairro={{ filters.bairro|urlencode }}&validacao={{ filters.validacao|urlencode }}">Bairro {% if sort == 'bairro' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a><button type="button" class="column-filter-button" data-filter-key="neighborhood" title="Filtrar bairro">▾</button></div></th>
       <th class="excel-filter-column" data-filter-column="process"><div class="column-heading"><a href="?ordenar=processo&direcao={% if sort == 'processo' and direction == 'asc' %}desc{% else %}asc{% endif %}">Processo {% if sort == 'processo' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a><button type="button" class="column-filter-button" data-filter-key="process" title="Filtrar processo">▾</button></div></th>
       <th class="excel-filter-column" data-filter-column="notification"><div class="column-heading"><a href="?ordenar=notificacao&direcao={% if sort == 'notificacao' and direction == 'asc' %}desc{% else %}asc{% endif %}">Notificação {% if sort == 'notificacao' %}{% if direction == 'asc' %}▲{% else %}▼{% endif %}{% endif %}</a><button type="button" class="column-filter-button" data-filter-key="notification" title="Filtrar notificação">▾</button></div></th>
-      <th class="excel-filter-column" data-filter-column="origin"><div class="column-heading"><span>Origem</span><button type="button" class="column-filter-button" data-filter-key="origin" title="Filtrar origem">▾</button></div></th><th class="excel-filter-column" data-filter-column="validation"><div class="column-heading"><span>Validação</span><button type="button" class="column-filter-button" data-filter-key="validation" title="Filtrar validação">▾</button></div></th><th>Autuações</th><th>Ações</th>
+      <th class="excel-filter-column" data-filter-column="validation"><div class="column-heading"><span>Validação</span><button type="button" class="column-filter-button" data-filter-key="validation" title="Filtrar validação">▾</button></div></th><th>Autuações</th><th>Ações</th>
     </tr></thead><tbody>
-    {% for item in items %}<tr class="client-row" data-name="{{ item.name|default:''|escape }}" data-street="{{ item.street|default:''|escape }}" data-neighborhood="{{ item.neighborhood|default:''|escape }}" data-process="{{ item.process_number|default:''|escape }}" data-notification="{{ item.notification_number|default:''|escape }}" data-origin="{{ item.get_origin_display|default:''|escape }}" data-validation="{{ item.get_validation_display|default:''|escape }}">
+    {% for item in items %}<tr class="client-row" data-name="{{ item.name|default:''|escape }}" data-street="{{ item.street|default:''|escape }}" data-neighborhood="{{ item.neighborhood|default:''|escape }}" data-process="{{ item.process_number|default:''|escape }}" data-notification="{{ item.notification_number|default:''|escape }}" data-validation="{{ item.get_validation_display|default:''|escape }}">
       <td class="select-column"><input class="client-selector" type="checkbox" value="{{ item.pk }}" data-consult-url="{% url 'client_autovistoria' item.pk %}" aria-label="Selecionar {{ item.name }}"></td>
       <td class="condo-photo-cell">{% if item.photo %}<img src="{{ item.photo.url }}" alt="Foto de {{ item.name }}">{% else %}<span>🏢</span>{% endif %}</td>
-      <td><strong>{{ item.name }}</strong></td><td>{{ item.street|default:'—' }}{% if item.address_number %}, {{ item.address_number }}{% endif %}</td><td>{{ item.neighborhood|default:'—' }}</td><td>{{ item.process_number|default:'—' }}</td><td>{{ item.notification_number|default:'—' }}</td><td><span class="tag origin-{{ item.origin }}">{{ item.get_origin_display }}</span></td><td><span class="status status-{{ item.validation }}">{{ item.get_validation_display }}</span></td><td>{{ item.autovistoria_infractions.count }}</td>
+      <td><strong>{{ item.name }}</strong></td><td>{{ item.street|default:'—' }}{% if item.address_number %}, {{ item.address_number }}{% endif %}</td><td>{{ item.neighborhood|default:'—' }}</td><td>{{ item.process_number|default:'—' }}</td><td>{{ item.notification_number|default:'—' }}</td><td><span class="status status-{{ item.validation }}">{{ item.get_validation_display }}</span></td><td>{{ item.autovistoria_infractions.count }}</td>
       <td class="row-actions"><a class="action-link" href="{% url 'client_autovistoria' item.pk %}">🌐 Consultar</a><a class="action-link" href="?editar={{ item.pk }}">✏️ Alterar</a><form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">🗑️ Excluir</button></form></td>
-    </tr>{% empty %}<tr><td colspan="11">Nenhum condomínio encontrado.</td></tr>{% endfor %}
+    </tr>{% empty %}<tr><td colspan="10">Nenhum condomínio encontrado.</td></tr>{% endfor %}
     </tbody></table></div>
     <div id="excel-filter-menu" class="excel-filter-menu" hidden>
       <div class="excel-filter-title"></div>
@@ -86,7 +86,7 @@
 
   const labels = {
     name: 'Condomínio', street: 'Rua', neighborhood: 'Bairro',
-    process: 'Processo', notification: 'Notificação', origin: 'Origem', validation: 'Validação'
+    process: 'Processo', notification: 'Notificação', validation: 'Validação'
   };
 
   function visibleRows() {

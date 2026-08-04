@@ -7,7 +7,6 @@ from django.core.mail import send_mail
 from django.db import connection, transaction
 from django.db.models import Count, Q
 import csv
-import json
 import io
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
@@ -142,8 +141,6 @@ def _crud(request, model, form_class, title, template="generic_list.html"):
     form = form_class(request.POST or None, request.FILES or None, instance=instance)
     if request.method == "POST" and form.is_valid():
         obj = form.save(commit=False)
-        if model is Client and not instance:
-            obj.origin = "manual"
         if hasattr(obj, "owner_id") and not obj.owner_id: obj.owner = request.user
         if hasattr(obj, "manager_id") and not obj.manager_id: obj.manager = request.user
         if hasattr(obj, "assignee_id") and not obj.assignee_id: obj.assignee = request.user
@@ -266,112 +263,6 @@ def client_autovistoria(request, pk):
             "pending_infractions_count": pending_infractions.count(),
         },
     )
-
-
-@login_required
-@require_POST
-def client_autovistoria_robot_import(request, pk):
-    """Recebe os comunicados lidos pela extensão do Chrome.
-
-    O CAPTCHA permanece sob responsabilidade do usuário. A extensão apenas
-    preenche os campos e, depois da consulta manual, envia a tabela exibida.
-    """
-    client = get_object_or_404(Client, pk=pk, active=True)
-    try:
-        payload = json.loads(request.body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return JsonResponse({"ok": False, "error": "Conteúdo JSON inválido."}, status=400)
-
-    rows = payload.get("items")
-    if not isinstance(rows, list) or not rows:
-        return JsonResponse({"ok": False, "error": "Nenhum comunicado foi recebido."}, status=400)
-    if len(rows) > 200:
-        return JsonResponse({"ok": False, "error": "A consulta excedeu o limite de 200 itens."}, status=400)
-
-    created = 0
-    skipped = 0
-    errors = []
-    finding = client.gazette_findings.order_by("-publication_date").first()
-    imported_ids = []
-
-    with transaction.atomic():
-        for position, raw in enumerate(rows, start=1):
-            if not isinstance(raw, dict):
-                errors.append(f"Linha {position}: formato inválido.")
-                continue
-            communication = str(raw.get("communication_number") or "").strip()[:50]
-            infraction_number = str(raw.get("infraction_number") or communication).strip()[:80]
-            infraction_type = str(raw.get("infraction_type") or "").strip()[:180]
-            complement = str(raw.get("complement") or "").strip()
-            notes = str(raw.get("notes") or "").strip()
-            date_text = str(raw.get("infraction_date") or "").strip()
-            if not infraction_number:
-                errors.append(f"Linha {position}: comunicado sem identificação.")
-                continue
-
-            infraction_date = None
-            for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d"):
-                try:
-                    infraction_date = datetime.strptime(date_text, fmt).date() if date_text else None
-                    break
-                except ValueError:
-                    continue
-
-            description_parts = []
-            if infraction_type:
-                description_parts.append(infraction_type)
-            if complement and complement not in {"-", "--"}:
-                description_parts.append(f"Complemento/unidade: {complement}")
-            if notes and notes not in {"-", "--"}:
-                description_parts.append(f"Observação: {notes}")
-            description = ". ".join(description_parts) or "Comunicado identificado no portal da Autovistoria."
-
-            if AutovistoriaInfraction.objects.filter(client=client, infraction_number__iexact=infraction_number).exists():
-                skipped += 1
-                continue
-
-            item = AutovistoriaInfraction.objects.create(
-                client=client,
-                gazette_finding=finding,
-                communication_number=communication,
-                infraction_number=infraction_number,
-                infraction_type=infraction_type,
-                description=description,
-                infraction_date=infraction_date,
-                status="ativa",
-                source_url="https://autovistoria.rio.rj.gov.br/ConsultaPublica.php",
-            )
-            imported_ids.append(item.pk)
-            created += 1
-
-        if created:
-            last_communication = next((str(r.get("communication_number") or "").strip() for r in reversed(rows) if isinstance(r, dict) and r.get("communication_number")), "")
-            if last_communication and not client.notification_number:
-                client.notification_number = last_communication[:50]
-                client.save(update_fields=("notification_number", "updated_at"))
-
-        AuditLog.objects.create(
-            actor=request.user,
-            action="autuacoes_importadas_pelo_robo_assistido",
-            entity="Client",
-            entity_id=str(client.pk),
-            details={
-                "cliente": client.name,
-                "incluidas": created,
-                "duplicadas": skipped,
-                "erros": errors[:20],
-                "ids": imported_ids,
-                "captcha": "preenchido_manualmente_pelo_usuario",
-            },
-        )
-
-    return JsonResponse({
-        "ok": True,
-        "created": created,
-        "skipped": skipped,
-        "errors": errors,
-        "message": f"{created} comunicado(s) importado(s); {skipped} duplicado(s) ignorado(s).",
-    })
 
 
 @login_required
@@ -549,20 +440,6 @@ def proposals(request): return _crud(request, Proposal, ProposalForm, "Propostas
 def rats(request):
     return render(request, "simple_list.html", {"title": "RAT — Relatórios de Atendimento", "items": RAT.objects.select_related("project")[:50]})
 
-
-def _parse_gazette_address(value):
-    import re
-    text = (value or "").strip()
-    neighborhood = ""
-    if " - " in text:
-        parts = [part.strip() for part in text.split(" - ") if part.strip()]
-        if len(parts) > 1:
-            text, neighborhood = parts[0], parts[-1]
-    match = re.match(r"^(.*?)(?:,|\s+n[º°o.]*)\s*(\d+[A-Za-z]?)\b", text, re.IGNORECASE)
-    if match:
-        return match.group(1).strip(), match.group(2).strip(), neighborhood
-    return text, "", neighborhood
-
 @login_required
 def gazette_findings(request):
     if request.method == "POST":
@@ -580,78 +457,27 @@ def gazette_findings(request):
                     all_findings.extend(day_findings)
                 except Exception:
                     continue
-            created_findings = created_clients = updated_clients = created_opportunities = duplicates = 0
-            for item in all_findings:
-                with transaction.atomic():
-                    finding, was_created = GazetteFinding.objects.get_or_create(
-                        edition_id=item["edition_id"], notification_number=item["notification_number"], defaults=item
-                    )
-                    created_findings += int(was_created)
-                    client = Client.objects.filter(
-                        process_number__iexact=finding.process_number,
-                        notification_number__iexact=finding.notification_number,
-                    ).first()
-                    if not client:
-                        client = Client.objects.filter(name__iexact=finding.condominium_name).first()
+            findings = all_findings
+            created = 0
+            for item in findings:
+                finding, was_created = GazetteFinding.objects.get_or_create(
+                    edition_id=item["edition_id"], notification_number=item["notification_number"], defaults=item
+                )
+                if not finding.client_id:
+                    client = Client.objects.filter(name__iexact=finding.condominium_name).first()
+                    if not client and finding.address:
+                        client = Client.objects.filter(street__icontains=finding.address[:80]).first()
                     if client:
-                        duplicates += 1
-                        changed = False
-                        for field, value in {
-                            "process_number": finding.process_number,
-                            "publication_date": finding.publication_date,
-                            "notification_number": finding.notification_number,
-                            "action_description": f"Intimação localizada automaticamente no Diário Oficial. Página {finding.page}. Fonte: {finding.source_url}",
-                            "classification": "autovistoria",
-                        }.items():
-                            if value and not getattr(client, field):
-                                setattr(client, field, value); changed = True
-                        if changed:
-                            client.save(); updated_clients += 1
-                    else:
-                        street, number, neighborhood = _parse_gazette_address(finding.address)
-                        client = Client.objects.create(
-                            name=finding.condominium_name,
-                            origin="diario_oficial",
-                            process_number=finding.process_number,
-                            publication_date=finding.publication_date,
-                            notification_number=finding.notification_number,
-                            street=street,
-                            address_number=number,
-                            neighborhood=neighborhood,
-                            classification="autovistoria",
-                            action_description=f"Intimação localizada automaticamente no Diário Oficial. Página {finding.page}. Fonte: {finding.source_url}",
-                            validation="validar",
-                            active=True,
-                        )
-                        created_clients += 1
-                    finding.client = client
-                    owner = request.user
-                    opportunity, opp_created = Opportunity.objects.get_or_create(
-                        client=client,
-                        communication_number=finding.notification_number,
-                        source="Diário Oficial",
-                        defaults={
-                            "title": f"Autovistoria — {client.name}",
-                            "stage": "lead",
-                            "estimated_value": 0,
-                            "owner": owner,
-                            "consultation_status": "Nova intimação — contato comercial pendente",
-                            "consultation_notes": f"Processo {finding.process_number}; publicação de {finding.publication_date:%d/%m/%Y}; página {finding.page}.",
-                            "consultation_address": finding.address,
-                            "source_url": finding.source_url,
-                            "consulted_at": timezone.now(),
-                        },
-                    )
-                    created_opportunities += int(opp_created)
-                    finding.status = "convertido"
-                    finding.save(update_fields=("client", "status", "updated_at"))
+                        finding.client = client
+                        finding.status = "conferido"
+                        finding.save(update_fields=("client", "status", "updated_at"))
+                created += int(was_created)
             period = f"{start_date:%d/%m/%Y} a {end_date:%d/%m/%Y}" if start_date else "edição mais recente"
-            AuditLog.objects.create(actor=request.user, action="pesquisa_diario_oficial", entity="GazetteFinding", entity_id=period, details={"localizados": len(all_findings), "publicacoes_novas": created_findings, "clientes_criados": created_clients, "clientes_atualizados": updated_clients, "oportunidades_criadas": created_opportunities, "duplicidades": duplicates})
-            messages.success(request, f"Período {period}: {len(all_findings)} notificações, {created_clients} clientes criados e {created_opportunities} oportunidades geradas.")
+            AuditLog.objects.create(actor=request.user, action="pesquisa_diario_oficial", entity="GazetteFinding", entity_id=period, details={"localizados": len(findings), "novos": created})
+            messages.success(request, f"Período {period}: {len(findings)} notificações localizadas, {created} novas.")
         except ValueError as exc:
             messages.error(request, str(exc))
         except Exception:
             messages.error(request, "Não foi possível consultar o Diário Oficial agora. Tente novamente em alguns minutos.")
         return redirect("gazette_findings")
-    return render(request, "gazette_findings.html", {"items": GazetteFinding.objects.select_related("client").all()[:200]})
-
+    return render(request, "gazette_findings.html", {"items": GazetteFinding.objects.all()[:200]})
