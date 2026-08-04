@@ -1,6 +1,10 @@
 const PORTAL_URL = 'https://autovistoria.rio.rj.gov.br/ConsultaPublica.php';
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'MGT_HEALTHCHECK') {
+    sendResponse({ok: true, version: chrome.runtime.getManifest().version});
+    return;
+  }
   if (message?.type === 'MGT_START_QUERY') {
     const job = {
       ...message.payload,

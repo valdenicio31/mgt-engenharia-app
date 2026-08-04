@@ -20,11 +20,11 @@
       <dl><dt>Logradouro</dt><dd>{{ client.street|default:'Não informado' }}</dd><dt>Número</dt><dd>{{ client.address_number|default:'Não informado' }}</dd><dt>Complemento</dt><dd>{{ client.complement|default:'—' }}</dd><dt>Bairro</dt><dd>{{ client.neighborhood|default:'Não informado' }}</dd><dt>Comunicado</dt><dd>{{ client.notification_number|default:'—' }}</dd></dl>
     </div>
     <div class="form-actions">
-      <button type="button" id="start-autovistoria-robot">🤖 Preencher e consultar Autovistoria</button>
+      <button type="button" id="start-autovistoria-robot" disabled>⏳ Verificando extensão...</button>
       <a class="secondary-button" target="_blank" rel="noopener" href="{{ portal_url }}">🌐 Abrir manualmente</a>
       <a class="secondary-button" href="{% url 'clients' %}">← Voltar</a>
     </div>
-    <p id="robot-feedback" class="import-help" aria-live="polite">A extensão MGT Autovistoria deve estar instalada no Chrome.</p>
+    <p id="robot-feedback" class="import-help" aria-live="polite">Verificando se a extensão MGT Autovistoria está disponível...</p>
     <ol class="import-help">
       <li>O robô abrirá o portal e digitará logradouro, número, complemento e bairro.</li>
       <li>Digite pessoalmente o CAPTCHA e clique em <strong>Consultar</strong>.</li>
@@ -58,17 +58,78 @@
   const card = document.getElementById('consultation-data');
   const button = document.getElementById('start-autovistoria-robot');
   const feedback = document.getElementById('robot-feedback');
-  if (!card || !button) return;
-  let extensionAnswered = false;
-  window.addEventListener('mgt-autovistoria-extension-ready', () => {
-    extensionAnswered = true;
-    feedback.textContent = 'Extensão MGT Autovistoria conectada e pronta.';
+  if (!card || !button || !feedback) return;
+
+  const CHECK_TIMEOUT_MS = 2200;
+  const START_TIMEOUT_MS = 3500;
+  let extensionReady = false;
+  let checkTimer = null;
+  let pendingNonce = null;
+
+  function setState(state, message) {
+    button.dataset.extensionState = state;
+    feedback.textContent = message;
+    feedback.classList.remove('status-ok', 'status-warning', 'status-error');
+    if (state === 'ready') {
+      extensionReady = true;
+      button.disabled = false;
+      button.textContent = '🤖 Preencher e consultar Autovistoria';
+      feedback.classList.add('status-ok');
+      return;
+    }
+    extensionReady = false;
+    button.disabled = true;
+    if (state === 'checking') {
+      button.textContent = '⏳ Verificando extensão...';
+      feedback.classList.add('status-warning');
+    } else {
+      button.textContent = '⚠️ Extensão indisponível';
+      feedback.classList.add('status-error');
+    }
+  }
+
+  function healthCheck() {
+    clearTimeout(checkTimer);
+    pendingNonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setState('checking', 'Verificando se a extensão MGT Autovistoria está instalada, ativa e respondendo...');
+    window.dispatchEvent(new CustomEvent('mgt-autovistoria-healthcheck', {detail: {nonce: pendingNonce}}));
+    checkTimer = window.setTimeout(() => {
+      if (!extensionReady) {
+        setState('unavailable', 'Extensão não localizada. Abra chrome://extensions, ative “MGT Autovistoria Assistida” e atualize esta página.');
+      }
+    }, CHECK_TIMEOUT_MS);
+  }
+
+  window.addEventListener('mgt-autovistoria-health-response', event => {
+    const detail = event.detail || {};
+    if (pendingNonce && detail.nonce && detail.nonce !== pendingNonce) return;
+    clearTimeout(checkTimer);
+    pendingNonce = null;
+    setState('ready', `Extensão conectada e pronta${detail.version ? ` — versão ${detail.version}` : ''}.`);
   });
+
+  window.addEventListener('mgt-autovistoria-extension-ready', event => {
+    clearTimeout(checkTimer);
+    const version = event.detail?.version;
+    setState('ready', `Extensão conectada e pronta${version ? ` — versão ${version}` : ''}.`);
+  });
+
   window.addEventListener('mgt-autovistoria-status', event => {
-    extensionAnswered = true;
-    feedback.textContent = event.detail?.message || 'Robô em execução.';
+    const detail = event.detail || {};
+    if (detail.level === 'error') {
+      setState('unavailable', detail.message || 'A extensão encontrou um erro.');
+      return;
+    }
+    extensionReady = true;
+    button.disabled = false;
+    feedback.textContent = detail.message || 'Robô em execução.';
   });
+
   button.addEventListener('click', () => {
+    if (!extensionReady) {
+      healthCheck();
+      return;
+    }
     const detail = {
       clientId: card.dataset.clientId,
       clientName: card.dataset.clientName,
@@ -81,13 +142,37 @@
       mgtOrigin: window.location.origin,
       mgtTabUrl: window.location.href
     };
-    window.dispatchEvent(new CustomEvent('mgt-autovistoria-start', {detail}));
-    feedback.textContent = 'Solicitação enviada à extensão. Aguarde a abertura do portal...';
-    setTimeout(() => {
-      if (!extensionAnswered) feedback.textContent = 'A extensão não respondeu. Instale ou ative “MGT Autovistoria Assistida” no Chrome e tente novamente.';
-    }, 1800);
+    button.disabled = true;
+    button.textContent = '⏳ Abrindo portal...';
+    feedback.textContent = 'Confirmando a conexão e abrindo o portal da Autovistoria...';
+    let startAnswered = false;
+    const startNonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const onStartResponse = event => {
+      const response = event.detail || {};
+      if (response.nonce !== startNonce) return;
+      startAnswered = true;
+      window.removeEventListener('mgt-autovistoria-start-response', onStartResponse);
+      if (response.ok) {
+        button.textContent = '✅ Portal aberto';
+        feedback.textContent = response.message || 'Portal aberto. Preencha o CAPTCHA e conclua a consulta.';
+      } else {
+        setState('unavailable', response.error || 'Não foi possível iniciar a consulta.');
+      }
+    };
+    window.addEventListener('mgt-autovistoria-start-response', onStartResponse);
+    window.dispatchEvent(new CustomEvent('mgt-autovistoria-start', {detail: {...detail, requestNonce: startNonce}}));
+    window.setTimeout(() => {
+      if (!startAnswered) {
+        window.removeEventListener('mgt-autovistoria-start-response', onStartResponse);
+        setState('unavailable', 'A extensão parou de responder. Reative-a em chrome://extensions e tente novamente.');
+      }
+    }, START_TIMEOUT_MS);
   });
-  window.dispatchEvent(new CustomEvent('mgt-autovistoria-page-ready'));
+
+  healthCheck();
+  window.addEventListener('focus', () => {
+    if (!extensionReady) healthCheck();
+  });
 })();
 </script>
 {% endblock %}
