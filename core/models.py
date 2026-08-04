@@ -78,6 +78,74 @@ class Client(Timestamped):
     action_description = models.TextField("descrição / providência", blank=True)
     validation = models.CharField("validação", max_length=20, choices=VALIDATIONS, default="validar")
     active = models.BooleanField(default=True)
+
+    ORIGIN_CODES = {
+        "manual": "DM",
+        "arquivo": "IP",
+        "diario_oficial": "ID",
+    }
+
+    COMMERCIAL_REQUIRED_FIELDS = (
+        ("name", "Nome"),
+        ("document", "CNPJ/CPF"),
+        ("email", "E-mail"),
+        ("phone", "Telefone"),
+        ("process_number", "Processo"),
+        ("publication_date", "Data da publicação"),
+        ("notification_number", "Notificação"),
+        ("street", "Rua/logradouro"),
+        ("address_number", "Número"),
+        ("neighborhood", "Bairro"),
+        ("city", "Cidade"),
+        ("state", "Estado"),
+        ("postal_code", "CEP"),
+        ("classification", "Classificação"),
+    )
+
+    @property
+    def origin_code(self):
+        return self.ORIGIN_CODES.get(self.origin, "--")
+
+    def commercial_missing_fields(self):
+        missing = []
+        for field_name, label in self.COMMERCIAL_REQUIRED_FIELDS:
+            value = getattr(self, field_name, None)
+            if value is None or (isinstance(value, str) and not value.strip()):
+                missing.append(label)
+        return missing
+
+    @property
+    def commercial_status_code(self):
+        if self.opportunities.exists():
+            return "OP"
+        if self.commercial_missing_fields():
+            return "DI"
+        if not self.autovistoria_infractions.exists():
+            return "AA"
+        return "PO"
+
+    @property
+    def commercial_status_label(self):
+        if self.opportunities.exists():
+            return "Oportunidade gerada"
+        missing = self.commercial_missing_fields()
+        if missing:
+            return f"Dados incompletos ({len(missing)})"
+        if not self.autovistoria_infractions.exists():
+            return "Aguardando autovistoria"
+        return "Pronto para oportunidade"
+
+    @property
+    def commercial_status_detail(self):
+        missing = self.commercial_missing_fields()
+        if missing:
+            return "Campos pendentes: " + ", ".join(missing)
+        if not self.autovistoria_infractions.exists():
+            return "Cadastre as infrações encontradas na Autovistoria."
+        if self.opportunities.exists():
+            return "Oportunidade comercial já vinculada ao cliente."
+        return "Cadastro completo e infrações registradas. Pode gerar oportunidade."
+
     def __str__(self): return self.name
 
 class Opportunity(Timestamped):

@@ -160,15 +160,16 @@ def _crud(request, model, form_class, title, template="generic_list.html"):
         search = (request.GET.get("q") or "").strip()
         city = (request.GET.get("cidade") or "").strip()
         neighborhood = (request.GET.get("bairro") or "").strip()
-        validation = (request.GET.get("validacao") or "").strip()
+        commercial_status = (request.GET.get("situacao") or "").strip()
         if search:
             items = items.filter(Q(name__icontains=search) | Q(document__icontains=search) | Q(street__icontains=search) | Q(process_number__icontains=search) | Q(notification_number__icontains=search))
         if city:
             items = items.filter(city__iexact=city)
         if neighborhood:
             items = items.filter(neighborhood__iexact=neighborhood)
-        if validation:
-            items = items.filter(validation=validation)
+        if commercial_status:
+            filtered_ids = [item.pk for item in items if item.commercial_status_code == commercial_status]
+            items = items.filter(pk__in=filtered_ids)
         allowed_sorts = {
             "nome": "name", "rua": "street", "bairro": "neighborhood", "cidade": "city",
             "processo": "process_number", "notificacao": "notification_number", "atualizado": "updated_at",
@@ -184,7 +185,7 @@ def _crud(request, model, form_class, title, template="generic_list.html"):
         else:
             items = items.order_by(f"{prefix}{sort_field}", "name")
         filters = {
-            "q": search, "cidade": city, "bairro": neighborhood, "validacao": validation,
+            "q": search, "cidade": city, "bairro": neighborhood, "situacao": commercial_status,
             "cities": Client.objects.exclude(city="").values_list("city", flat=True).distinct().order_by("city"),
             "neighborhoods": Client.objects.exclude(neighborhood="").values_list("neighborhood", flat=True).distinct().order_by("neighborhood"),
         }
@@ -378,6 +379,14 @@ def client_autovistoria_robot_import(request, pk):
 @require_POST
 def client_autovistoria_create_opportunity(request, pk):
     client = get_object_or_404(Client, pk=pk, active=True)
+    missing_fields = client.commercial_missing_fields()
+    if missing_fields:
+        messages.warning(
+            request,
+            "Complete o cadastro antes de gerar a oportunidade. Campos pendentes: " + ", ".join(missing_fields) + ".",
+        )
+        return redirect("clients")
+
     pending = list(client.autovistoria_infractions.filter(opportunity__isnull=True))
     if not pending:
         messages.warning(request, "Nenhuma autuação nova foi registrada. Consulte o portal e importe ao menos uma autuação antes de gerar a oportunidade.")
@@ -407,6 +416,9 @@ def client_autovistoria_create_opportunity(request, pk):
         opportunity.source_url = latest.source_url or "https://autovistoria.rio.rj.gov.br/ConsultaPublica.php"
         opportunity.consulted_at = timezone.now()
         opportunity.save()
+        if client.validation != "confirmado":
+            client.validation = "confirmado"
+            client.save(update_fields=("validation", "updated_at"))
         AutovistoriaInfraction.objects.filter(pk__in=[item.pk for item in pending]).update(opportunity=opportunity)
         AuditLog.objects.create(
             actor=request.user,

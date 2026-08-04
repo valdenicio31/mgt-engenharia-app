@@ -50,7 +50,7 @@ class ClientForm(forms.ModelForm):
             "process_number", "publication_date", "notification_number",
             "street", "address_number", "complement", "neighborhood",
             "city", "state", "postal_code", "classification",
-            "action_description", "validation", "active",
+            "action_description", "active",
         )
         widgets = {
             "publication_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
