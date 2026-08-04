@@ -1,10 +1,7 @@
-"""Compatibility migration restored for the historical MGT migration graph.
+"""Compatibility node required by migration 0010.
 
-The original project referenced this migration from 0010, but the file was
-missing from the distributed ZIP.  The current model state does not contain
-the historical Task fields named in this migration, so this node intentionally
-contains no database operations.  Its purpose is to restore a consistent graph
-without deleting data or rewriting already-applied migration history.
+The distributed local copy lost this historical file. Restoring the node keeps
+Django's migration graph consistent without deleting or recreating data.
 """
 from django.db import migrations
 

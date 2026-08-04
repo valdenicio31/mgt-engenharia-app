@@ -1,23 +1,39 @@
 {% extends 'base.html' %}
 {% block content %}
 <section class="panel">
-  <h2>🔎 Processo de consulta e importação da Autovistoria</h2>
-  <p><strong>Etapas obrigatórias:</strong> Diário Oficial → condomínio → consulta no portal → importação de todos os itens autuados → geração da oportunidade → contato comercial.</p>
+  <h2>🤖 Consulta assistida da Autovistoria</h2>
+  <p><strong>Fluxo obrigatório:</strong> o robô digita os dados campo a campo → você informa o código de segurança → o robô detecta e importa os comunicados automaticamente → o MGT libera a oportunidade.</p>
 </section>
 <section class="grid autovistoria-workflow">
   <article class="panel">
-    <h2>1. Consultar o portal oficial</h2>
-    <div class="consultation-card" id="consultation-data" data-street="{{ client.street|escape }}" data-number="{{ client.address_number|escape }}" data-complement="{{ client.complement|escape }}" data-neighborhood="{{ client.neighborhood|escape }}" data-communication="{{ client.notification_number|escape }}">
+    <h2>1. Iniciar o robô assistido</h2>
+    <div class="consultation-card" id="consultation-data"
+      data-client-id="{{ client.pk }}"
+      data-client-name="{{ client.name|escape }}"
+      data-street="{{ client.street|escape }}"
+      data-number="{{ client.address_number|escape }}"
+      data-complement="{{ client.complement|escape }}"
+      data-neighborhood="{{ client.neighborhood|escape }}"
+      data-communication="{{ client.notification_number|escape }}"
+      data-import-url="{% url 'client_autovistoria_robot_import' client.pk %}">
       <h3>{{ client.name }}</h3>
       <dl><dt>Logradouro</dt><dd>{{ client.street|default:'Não informado' }}</dd><dt>Número</dt><dd>{{ client.address_number|default:'Não informado' }}</dd><dt>Complemento</dt><dd>{{ client.complement|default:'—' }}</dd><dt>Bairro</dt><dd>{{ client.neighborhood|default:'Não informado' }}</dd><dt>Comunicado</dt><dd>{{ client.notification_number|default:'—' }}</dd></dl>
     </div>
-    <div class="form-actions"><button type="button" id="copy-consultation">📋 Copiar dados</button><a class="secondary-button" target="_blank" rel="noopener" href="{{ portal_url }}">🌐 Abrir site da Autovistoria</a><a class="secondary-button" href="{% url 'clients' %}">← Voltar</a></div>
-    <p id="copy-feedback" class="import-help" aria-live="polite"></p>
-    <p class="import-help">No portal, informe os dados, digite o código de segurança e consulte. Depois volte ao MGT e registre <strong>cada item autuado</strong>.</p>
+    <div class="form-actions">
+      <button type="button" id="start-autovistoria-robot">🤖 Preencher e consultar Autovistoria</button>
+      <a class="secondary-button" target="_blank" rel="noopener" href="{{ portal_url }}">🌐 Abrir manualmente</a>
+      <a class="secondary-button" href="{% url 'clients' %}">← Voltar</a>
+    </div>
+    <p id="robot-feedback" class="import-help" aria-live="polite">A extensão MGT Autovistoria deve estar instalada no Chrome.</p>
+    <ol class="import-help">
+      <li>O robô abrirá o portal e digitará logradouro, número, complemento e bairro.</li>
+      <li>Digite pessoalmente o CAPTCHA e clique em <strong>Consultar</strong>.</li>
+      <li>Quando a tabela aparecer, o robô importará todos os comunicados automaticamente e retornará ao MGT.</li>
+    </ol>
   </article>
   <article class="panel">
-    <h2>2. Importar item autuado</h2>
-    <p>Cadastre uma autuação por vez. Repita esta etapa até registrar todos os itens exibidos no portal.</p>
+    <h2>2. Inclusão manual de contingência</h2>
+    <p>Use este formulário somente quando algum item não puder ser lido automaticamente.</p>
     <form method="post" class="form">{% csrf_token %}{{ form.as_p }}<div class="form-actions"><button type="submit">➕ Registrar esta autuação</button></div></form>
   </article>
 </section>
@@ -33,9 +49,45 @@
     <p><strong>{{ pending_infractions_count }}</strong> autuação(ões) nova(s) pronta(s) para compor a oportunidade.</p>
     <form method="post" action="{% url 'client_autovistoria_create_opportunity' client.pk %}">{% csrf_token %}<button type="submit">🎯 Gerar oportunidade com as autuações</button></form>
   {% else %}
-    <p>Registre os itens encontrados no portal antes de gerar ou atualizar a oportunidade.</p>
+    <p>Importe os itens encontrados no portal antes de gerar ou atualizar a oportunidade.</p>
     <button type="button" disabled>🎯 Gerar oportunidade</button>
   {% endif %}
 </section>
-<script>(()=>{const c=document.getElementById('consultation-data'),b=document.getElementById('copy-consultation'),f=document.getElementById('copy-feedback');if(!c||!b)return;const l=[`Logradouro: ${c.dataset.street||''}`,`Número: ${c.dataset.number||''}`,`Complemento: ${c.dataset.complement||''}`,`Bairro: ${c.dataset.neighborhood||''}`,`Número do comunicado: ${c.dataset.communication||''}`];b.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(l.join('\n'));f.textContent='Dados copiados.'}catch(e){f.textContent=l.join(' | ')}})})();</script>
+<script>
+(() => {
+  const card = document.getElementById('consultation-data');
+  const button = document.getElementById('start-autovistoria-robot');
+  const feedback = document.getElementById('robot-feedback');
+  if (!card || !button) return;
+  let extensionAnswered = false;
+  window.addEventListener('mgt-autovistoria-extension-ready', () => {
+    extensionAnswered = true;
+    feedback.textContent = 'Extensão MGT Autovistoria conectada e pronta.';
+  });
+  window.addEventListener('mgt-autovistoria-status', event => {
+    extensionAnswered = true;
+    feedback.textContent = event.detail?.message || 'Robô em execução.';
+  });
+  button.addEventListener('click', () => {
+    const detail = {
+      clientId: card.dataset.clientId,
+      clientName: card.dataset.clientName,
+      street: card.dataset.street,
+      number: card.dataset.number,
+      complement: card.dataset.complement,
+      neighborhood: card.dataset.neighborhood,
+      communication: card.dataset.communication,
+      importUrl: card.dataset.importUrl,
+      mgtOrigin: window.location.origin,
+      mgtTabUrl: window.location.href
+    };
+    window.dispatchEvent(new CustomEvent('mgt-autovistoria-start', {detail}));
+    feedback.textContent = 'Solicitação enviada à extensão. Aguarde a abertura do portal...';
+    setTimeout(() => {
+      if (!extensionAnswered) feedback.textContent = 'A extensão não respondeu. Instale ou ative “MGT Autovistoria Assistida” no Chrome e tente novamente.';
+    }, 1800);
+  });
+  window.dispatchEvent(new CustomEvent('mgt-autovistoria-page-ready'));
+})();
+</script>
 {% endblock %}
