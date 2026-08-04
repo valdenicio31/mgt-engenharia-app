@@ -142,6 +142,8 @@ def _crud(request, model, form_class, title, template="generic_list.html"):
     form = form_class(request.POST or None, request.FILES or None, instance=instance)
     if request.method == "POST" and form.is_valid():
         obj = form.save(commit=False)
+        if model is Client and not instance:
+            obj.origin = "manual"
         if hasattr(obj, "owner_id") and not obj.owner_id: obj.owner = request.user
         if hasattr(obj, "manager_id") and not obj.manager_id: obj.manager = request.user
         if hasattr(obj, "assignee_id") and not obj.assignee_id: obj.assignee = request.user
@@ -547,6 +549,20 @@ def proposals(request): return _crud(request, Proposal, ProposalForm, "Propostas
 def rats(request):
     return render(request, "simple_list.html", {"title": "RAT — Relatórios de Atendimento", "items": RAT.objects.select_related("project")[:50]})
 
+
+def _parse_gazette_address(value):
+    import re
+    text = (value or "").strip()
+    neighborhood = ""
+    if " - " in text:
+        parts = [part.strip() for part in text.split(" - ") if part.strip()]
+        if len(parts) > 1:
+            text, neighborhood = parts[0], parts[-1]
+    match = re.match(r"^(.*?)(?:,|\s+n[º°o.]*)\s*(\d+[A-Za-z]?)\b", text, re.IGNORECASE)
+    if match:
+        return match.group(1).strip(), match.group(2).strip(), neighborhood
+    return text, "", neighborhood
+
 @login_required
 def gazette_findings(request):
     if request.method == "POST":
@@ -564,27 +580,78 @@ def gazette_findings(request):
                     all_findings.extend(day_findings)
                 except Exception:
                     continue
-            findings = all_findings
-            created = 0
-            for item in findings:
-                finding, was_created = GazetteFinding.objects.get_or_create(
-                    edition_id=item["edition_id"], notification_number=item["notification_number"], defaults=item
-                )
-                if not finding.client_id:
-                    client = Client.objects.filter(name__iexact=finding.condominium_name).first()
-                    if not client and finding.address:
-                        client = Client.objects.filter(street__icontains=finding.address[:80]).first()
+            created_findings = created_clients = updated_clients = created_opportunities = duplicates = 0
+            for item in all_findings:
+                with transaction.atomic():
+                    finding, was_created = GazetteFinding.objects.get_or_create(
+                        edition_id=item["edition_id"], notification_number=item["notification_number"], defaults=item
+                    )
+                    created_findings += int(was_created)
+                    client = Client.objects.filter(
+                        process_number__iexact=finding.process_number,
+                        notification_number__iexact=finding.notification_number,
+                    ).first()
+                    if not client:
+                        client = Client.objects.filter(name__iexact=finding.condominium_name).first()
                     if client:
-                        finding.client = client
-                        finding.status = "conferido"
-                        finding.save(update_fields=("client", "status", "updated_at"))
-                created += int(was_created)
+                        duplicates += 1
+                        changed = False
+                        for field, value in {
+                            "process_number": finding.process_number,
+                            "publication_date": finding.publication_date,
+                            "notification_number": finding.notification_number,
+                            "action_description": f"Intimação localizada automaticamente no Diário Oficial. Página {finding.page}. Fonte: {finding.source_url}",
+                            "classification": "autovistoria",
+                        }.items():
+                            if value and not getattr(client, field):
+                                setattr(client, field, value); changed = True
+                        if changed:
+                            client.save(); updated_clients += 1
+                    else:
+                        street, number, neighborhood = _parse_gazette_address(finding.address)
+                        client = Client.objects.create(
+                            name=finding.condominium_name,
+                            origin="diario_oficial",
+                            process_number=finding.process_number,
+                            publication_date=finding.publication_date,
+                            notification_number=finding.notification_number,
+                            street=street,
+                            address_number=number,
+                            neighborhood=neighborhood,
+                            classification="autovistoria",
+                            action_description=f"Intimação localizada automaticamente no Diário Oficial. Página {finding.page}. Fonte: {finding.source_url}",
+                            validation="validar",
+                            active=True,
+                        )
+                        created_clients += 1
+                    finding.client = client
+                    owner = request.user
+                    opportunity, opp_created = Opportunity.objects.get_or_create(
+                        client=client,
+                        communication_number=finding.notification_number,
+                        source="Diário Oficial",
+                        defaults={
+                            "title": f"Autovistoria — {client.name}",
+                            "stage": "lead",
+                            "estimated_value": 0,
+                            "owner": owner,
+                            "consultation_status": "Nova intimação — contato comercial pendente",
+                            "consultation_notes": f"Processo {finding.process_number}; publicação de {finding.publication_date:%d/%m/%Y}; página {finding.page}.",
+                            "consultation_address": finding.address,
+                            "source_url": finding.source_url,
+                            "consulted_at": timezone.now(),
+                        },
+                    )
+                    created_opportunities += int(opp_created)
+                    finding.status = "convertido"
+                    finding.save(update_fields=("client", "status", "updated_at"))
             period = f"{start_date:%d/%m/%Y} a {end_date:%d/%m/%Y}" if start_date else "edição mais recente"
-            AuditLog.objects.create(actor=request.user, action="pesquisa_diario_oficial", entity="GazetteFinding", entity_id=period, details={"localizados": len(findings), "novos": created})
-            messages.success(request, f"Período {period}: {len(findings)} notificações localizadas, {created} novas.")
+            AuditLog.objects.create(actor=request.user, action="pesquisa_diario_oficial", entity="GazetteFinding", entity_id=period, details={"localizados": len(all_findings), "publicacoes_novas": created_findings, "clientes_criados": created_clients, "clientes_atualizados": updated_clients, "oportunidades_criadas": created_opportunities, "duplicidades": duplicates})
+            messages.success(request, f"Período {period}: {len(all_findings)} notificações, {created_clients} clientes criados e {created_opportunities} oportunidades geradas.")
         except ValueError as exc:
             messages.error(request, str(exc))
         except Exception:
             messages.error(request, "Não foi possível consultar o Diário Oficial agora. Tente novamente em alguns minutos.")
         return redirect("gazette_findings")
-    return render(request, "gazette_findings.html", {"items": GazetteFinding.objects.all()[:200]})
+    return render(request, "gazette_findings.html", {"items": GazetteFinding.objects.select_related("client").all()[:200]})
+

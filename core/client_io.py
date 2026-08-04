@@ -16,7 +16,7 @@ COLUMNS = [
     ("street", "Rua"), ("address_number", "Numero"), ("complement", "Complemento"),
     ("neighborhood", "Bairro"), ("city", "Cidade"), ("state", "Estado"), ("postal_code", "CEP"),
     ("notification_number", "Numero_Notificacao"), ("classification", "Classificacao"),
-    ("action_description", "Descricao_Providencia"), ("validation", "Validacao"), ("active", "Ativo"),
+    ("action_description", "Descricao_Providencia"), ("validation", "Validacao"), ("origin", "Origem"), ("active", "Ativo"),
 ]
 
 
@@ -59,6 +59,7 @@ def _normalize(row):
     data = {key: (str(value).strip() if value is not None else "") for key, value in data.items()}
     data["publication_date"] = _date(data.get("publication_date"))
     data["active"] = _bool(data.get("active", "sim"))
+    data["origin"] = "arquivo"
     data["state"] = data.get("state", "RJ").upper()[:2]
     if not data.get("name"):
         raise ValueError("Nome do condomínio não informado")
@@ -134,8 +135,12 @@ def import_clients(upload):
             if not match and data.get("street"):
                 match = by_address.get((_key(data["name"]), _key(data["street"]), _key(data.get("address_number", ""))))
             if match:
+                existing_origin = match.origin
                 for field, value in data.items():
-                    setattr(match, field, value)
+                    if field != "origin":
+                        setattr(match, field, value)
+                if not existing_origin:
+                    match.origin = "arquivo"
                 if match.pk:
                     changed_clients[match.pk] = match
                 updated += 1
