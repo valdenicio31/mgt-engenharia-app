@@ -1,2 +1,167 @@
-{% load static %}<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Acesso | MGT</title><link rel="stylesheet" href="{% static 'css/style.css' %}"><link rel="stylesheet" href="{% static 'css/branding.css' %}"></head>
-<body class="login"><section class="login-card"><img src="{% static 'img/viaia-logo.png' %}" alt="Logotipo VIA IA" class="via-logo"><h1>MGT Engenharia</h1><p>Ambiente controlado de homologação</p><form method="post">{% csrf_token %}{{ form.as_p }}<button>Entrar com segurança</button></form>{% if form.errors %}<p class="error">E-mail/CPF ou senha inválidos.</p>{% endif %}<div class="login-links"><a href="{% url 'first_access' %}">Primeiro acesso / Cadastre-se</a><a href="{% url 'password_reset' %}">Esqueci minha senha</a></div><footer class="login-footer">By VIA IA © 2026</footer></section></body></html>
+﻿{% comment %}MGT_LOGIN_OFICIAL_RECONSTRUCAO_V1{% endcomment %}<!-- MGT_LOGIN_OFICIAL_RECONSTRUCAO_V1 -->
+{% load static %}
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MGT Engenharia | Acesso</title>
+  <style>
+    :root{
+      --navy:#06182d;
+      --navy-2:#0b2747;
+      --gold:#d6a21f;
+      --gold-2:#f0c14b;
+      --white:#ffffff;
+      --text:#0c1726;
+      --muted:#667085;
+      --line:#d7dee8;
+      --bg:#eef2f7;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;min-height:100%;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    body{min-height:100vh}
+    .login-shell{min-height:100vh;display:grid;grid-template-columns:minmax(420px,1.08fr) minmax(420px,.92fr);background:linear-gradient(135deg,var(--navy),#0a2340)}
+    .brand-panel{position:relative;overflow:hidden;padding:48px 56px 38px;color:#fff;display:flex;flex-direction:column;justify-content:space-between}
+    .brand-panel:before{content:"";position:absolute;inset:0;background:
+      radial-gradient(circle at 18% 20%,rgba(240,193,75,.18),transparent 28%),
+      linear-gradient(120deg,rgba(255,255,255,.03),transparent 55%)}
+    .building{position:absolute;right:-45px;bottom:-40px;width:72%;height:78%;opacity:.23;transform:skewY(-3deg);
+      background:
+      linear-gradient(90deg,transparent 0 12%,rgba(214,162,31,.45) 12% 13%,transparent 13% 25%,rgba(214,162,31,.4) 25% 26%,transparent 26% 39%,rgba(214,162,31,.4) 39% 40%,transparent 40% 53%,rgba(214,162,31,.4) 53% 54%,transparent 54% 67%,rgba(214,162,31,.4) 67% 68%,transparent 68%),
+      repeating-linear-gradient(0deg,rgba(255,255,255,.12) 0 2px,transparent 2px 32px),
+      linear-gradient(160deg,#2b3f55,#091a2e)}
+    .brand-content,.brand-footer{position:relative;z-index:1}
+    .logo-row{display:flex;align-items:center;gap:20px;margin-bottom:44px}
+    .logo-mark{width:92px;height:92px;display:grid;place-items:center}
+    .logo-mark svg{width:100%;height:100%}
+    .logo-text strong{display:block;font-size:54px;letter-spacing:.08em;line-height:.9}
+    .logo-text span{display:block;color:var(--gold-2);font-size:24px;letter-spacing:.18em;margin-top:10px;font-weight:700}
+    .tagline{font-size:28px;font-weight:700;margin:0 0 12px}
+    .gold-line{width:66px;height:3px;background:var(--gold);margin:18px 0 22px}
+    .description{max-width:560px;font-size:18px;line-height:1.55;color:#e7edf5}
+    .features{display:grid;gap:18px;margin-top:40px;max-width:560px}
+    .feature{display:grid;grid-template-columns:58px 1fr;gap:16px;align-items:center}
+    .feature-icon{width:54px;height:54px;border:1.5px solid var(--gold);border-radius:16px;display:grid;place-items:center;color:var(--gold-2);font-size:25px}
+    .feature strong{display:block;color:var(--gold-2);font-size:17px;margin-bottom:4px}
+    .feature span{font-size:14px;line-height:1.4;color:#eef3f8}
+    .brand-footer{display:flex;justify-content:space-between;gap:18px;font-size:13px;color:#d5dde8}
+    .brand-footer b{color:var(--gold-2)}
+    .form-side{display:flex;align-items:center;justify-content:center;padding:46px;background:linear-gradient(180deg,#f9fbfd,#edf2f7)}
+    .login-card{width:min(100%,660px);background:#fff;border-radius:24px;box-shadow:0 26px 70px rgba(3,20,39,.18);overflow:hidden}
+    .card-main{padding:44px 58px 34px}
+    .card-logo{display:flex;justify-content:center;align-items:center;gap:14px;margin-bottom:26px}
+    .card-logo .mini-mark{width:72px;height:72px}
+    .card-logo strong{font-size:40px;letter-spacing:.08em;color:var(--navy)}
+    .card-logo span{display:block;color:var(--gold);font-weight:700;letter-spacing:.16em;font-size:15px}
+    .eyebrow{text-align:center;font-size:13px;font-weight:800;letter-spacing:.18em;color:var(--gold);margin-bottom:8px}
+    h1{text-align:center;margin:0;font-size:30px}
+    .subtitle{text-align:center;color:var(--muted);margin:10px 0 30px}
+    .form-group{margin-bottom:20px}
+    label{display:block;font-weight:700;margin-bottom:8px}
+    .field{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;background:#fff;box-shadow:0 2px 7px rgba(16,24,40,.05)}
+    .field span{padding-left:16px;color:#6a7790;font-size:18px}
+    .field input{width:100%;border:0;outline:0;padding:15px 16px;font-size:16px;background:transparent}
+    .submit-btn{width:100%;border:0;border-radius:10px;background:linear-gradient(90deg,var(--navy),var(--navy-2));color:#fff;font-size:17px;font-weight:700;padding:16px;cursor:pointer;box-shadow:0 8px 20px rgba(6,24,45,.2)}
+    .submit-btn:hover{filter:brightness(1.08)}
+    .links{display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin-top:20px}
+    .links a{color:#0b4ca8;text-decoration:none;font-weight:600;font-size:14px}
+    .links a:hover{text-decoration:underline}
+    .messages{margin:0 0 18px;padding:0;list-style:none}
+    .messages li{background:#fff4e5;border-left:4px solid var(--gold);padding:12px 14px;border-radius:8px;color:#6b4b00}
+    .security{border-top:1px solid #e8edf3;background:#f8fafc;padding:18px 24px;text-align:center;color:#697386;font-size:14px}
+    .security strong{color:var(--navy)}
+    @media(max-width:980px){
+      .login-shell{grid-template-columns:1fr}
+      .brand-panel{min-height:520px;padding:36px}
+      .form-side{padding:28px 18px 40px}
+      .brand-footer{flex-direction:column}
+    }
+    @media(max-width:560px){
+      .brand-panel{padding:28px 22px}
+      .logo-text strong{font-size:40px}
+      .logo-text span{font-size:17px}
+      .card-main{padding:34px 24px 26px}
+      .card-logo strong{font-size:30px}
+      .form-side{padding:18px 12px 28px}
+    }
+  </style>
+</head>
+<body>
+<div class="login-shell">
+  <section class="brand-panel">
+    <div class="building"></div>
+    <div class="brand-content">
+      <div class="logo-row">
+        <div class="logo-mark">
+          <svg viewBox="0 0 100 100" aria-label="MGT Engenharia">
+            <defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#f0c14b"/><stop offset="1" stop-color="#c88a08"/></linearGradient></defs>
+            <path fill="url(#g)" d="M8 85V25l22-17v77H8zm27 0V42l15-12 15 12v43H52V57l-2-2-2 2v28H35z"/>
+            <path fill="#fff" d="M8 37l22 18 20-17 20 17 22-18v16L70 71 50 55 30 71 8 53z"/>
+            <path fill="#0b2747" d="M70 85V8l22 17v60H70z"/>
+          </svg>
+        </div>
+        <div class="logo-text"><strong>MGT</strong><span>ENGENHARIA</span></div>
+      </div>
+      <p class="tagline">Gestão de Projetos e Homologações</p>
+      <div class="gold-line"></div>
+      <p class="description">Plataforma integrada para gestão de clientes, projetos, documentos, oportunidades e processos de engenharia com segurança, eficiência e rastreabilidade.</p>
+      <div class="features">
+        <div class="feature"><div class="feature-icon">🛡</div><div><strong>Ambiente Seguro</strong><span>Seus dados protegidos com boas práticas e controle de acesso.</span></div></div>
+        <div class="feature"><div class="feature-icon">📊</div><div><strong>Gestão Eficiente</strong><span>Organize projetos, clientes e documentos em um só lugar.</span></div></div>
+        <div class="feature"><div class="feature-icon">✓</div><div><strong>Homologação Controlada</strong><span>Fluxos de aprovação com visibilidade e rastreabilidade.</span></div></div>
+      </div>
+    </div>
+    <div class="brand-footer">
+      <span>© 2026 <b>MGT Engenharia</b>. Todos os direitos reservados.</span>
+      <span>Desenvolvido por <b>VIA IA</b> © 2026</span>
+    </div>
+  </section>
+
+  <section class="form-side">
+    <div class="login-card">
+      <div class="card-main">
+        <div class="card-logo">
+          <div class="mini-mark">
+            <svg viewBox="0 0 100 100" aria-hidden="true">
+              <defs><linearGradient id="g2" x1="0" x2="1"><stop stop-color="#f0c14b"/><stop offset="1" stop-color="#c88a08"/></linearGradient></defs>
+              <path fill="url(#g2)" d="M8 85V25l22-17v77H8zm27 0V42l15-12 15 12v43H52V57l-2-2-2 2v28H35z"/>
+              <path fill="#0b2747" d="M8 37l22 18 20-17 20 17 22-18v16L70 71 50 55 30 71 8 53zM70 85V8l22 17v60H70z"/>
+            </svg>
+          </div>
+          <div><strong>MGT</strong><span>ENGENHARIA</span></div>
+        </div>
+        <div class="eyebrow">ACESSO AO SISTEMA</div>
+        <h1>Bem-vindo ao MGT</h1>
+        <p class="subtitle">Entre com suas credenciais para continuar.</p>
+
+        {% if messages %}
+          <ul class="messages">{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>
+        {% endif %}
+
+        <form method="post" novalidate>
+          {% csrf_token %}
+          <div class="form-group">
+            <label for="id_username">E-mail ou CPF</label>
+            <div class="field"><span>👤</span><input id="id_username" name="username" type="text" autocomplete="username" placeholder="Digite seu e-mail ou CPF" required></div>
+          </div>
+          <div class="form-group">
+            <label for="id_password">Senha</label>
+            <div class="field"><span>🔒</span><input id="id_password" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required></div>
+          </div>
+          {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+          <button class="submit-btn" type="submit">🔒 Entrar com segurança</button>
+        </form>
+
+        <div class="links">
+          <a href="{% url 'first_access' %}">Primeiro acesso</a>
+          <a href="{% url 'first_access' %}">Cadastre-se</a>
+          <a href="{% url 'password_reset' %}">Esqueci minha senha</a>
+        </div>
+      </div>
+      <div class="security"><strong>🔒 Ambiente controlado</strong> para homologação e gestão.</div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

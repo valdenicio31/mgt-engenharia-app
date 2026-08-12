@@ -22,7 +22,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'MGT_IMPORT_RESULTS') {
     chrome.storage.local.get('mgtAutovistoriaJob', ({mgtAutovistoriaJob: job}) => {
       if (!job?.sourceTabId) return sendResponse({ok: false, error: 'A aba do MGT não foi localizada.'});
-      chrome.tabs.sendMessage(job.sourceTabId, {type: 'MGT_POST_RESULTS', items: message.items, job}, response => {
+      chrome.tabs.sendMessage(job.sourceTabId, {type: 'MGT_POST_RESULTS', items: message.items, official_address: message.official_address || {}, job}, response => {
         if (chrome.runtime.lastError) return sendResponse({ok: false, error: chrome.runtime.lastError.message});
         if (response?.ok) chrome.tabs.update(job.sourceTabId, {active: true});
         sendResponse(response || {ok: false, error: 'Sem resposta do MGT.'});

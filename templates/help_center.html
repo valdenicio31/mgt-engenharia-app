@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block heading %}Ajuda / Help{% endblock %}
+{% block content %}
+<section class="panel help-hero">
+  <h2>Central de Ajuda MGT</h2>
+  <p><strong>Objetivo sistêmico:</strong> {{ system_objective }}</p>
+  <p>Consulte abaixo a finalidade de cada tela, quando utilizá-la e o fluxo básico de operação.</p>
+  <input id="help-search" type="search" placeholder="Pesquisar funcionalidade, tela ou processo..." style="width:100%;padding:.85rem;border:1px solid #ccd1db;border-radius:10px">
+</section>
+<section class="help-grid" id="help-grid">
+{% for module in modules %}
+<article class="panel help-card" data-help="{{ module.title }} {{ module.objective }} {{ module.steps|join:' ' }}">
+  <h3>{{ module.title }}</h3>
+  <p><strong>Objetivo:</strong> {{ module.objective }}</p>
+  <h4>Como utilizar</h4>
+  <ol>{% for step in module.steps %}<li>{{ step }}</li>{% endfor %}</ol>
+</article>
+{% endfor %}
+</section>
+<script>
+const input=document.getElementById('help-search');
+input.addEventListener('input',()=>{const q=input.value.toLowerCase().trim();document.querySelectorAll('.help-card').forEach(card=>{card.style.display=!q||card.dataset.help.toLowerCase().includes(q)?'block':'none';});});
+</script>
+{% endblock %}

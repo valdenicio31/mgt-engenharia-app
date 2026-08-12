@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "MGT Autovistoria Assistida",
-  "version": "1.0.3",
-  "description": "Valida a extensão antes de liberar a consulta, preenche a Autovistoria, aguarda o CAPTCHA e importa os comunicados para o MGT.",
+  "version": "1.0.4",
+  "description": "Motor 2.0: preenchimento robusto, validação do endereço oficial, CAPTCHA manual e importação inteligente dos comunicados.",
   "permissions": [
     "storage",
     "tabs"

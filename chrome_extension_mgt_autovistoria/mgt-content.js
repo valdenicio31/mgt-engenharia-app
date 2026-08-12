@@ -58,7 +58,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     method: 'POST',
     credentials: 'same-origin',
     headers: {'Content-Type': 'application/json', 'X-CSRFToken': cookie('csrftoken')},
-    body: JSON.stringify({items: message.items, source: 'chrome-extension-assisted-v1.0.3'})
+    body: JSON.stringify({items: message.items, source: 'chrome-extension-assisted-v1.0.4'})
   }).then(async response => {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || `Erro HTTP ${response.status}`);

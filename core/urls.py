@@ -24,4 +24,5 @@ urlpatterns = [
     path("tarefas/", views.tasks, name="tasks"),
     path("rats/", views.rats, name="rats"),
     path("diario-oficial/", views.gazette_findings, name="gazette_findings"),
+    path("ajuda/", views.help_center, name="help_center"),
 ]

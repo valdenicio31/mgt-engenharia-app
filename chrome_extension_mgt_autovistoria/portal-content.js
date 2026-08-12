@@ -35,16 +35,38 @@ function setNativeValue(element, value) {
   element.dispatchEvent(new Event('input', {bubbles: true}));
   element.dispatchEvent(new Event('change', {bubbles: true}));
 }
-async function typeLikePerson(input, text) {
+async function fillStable(input, text) {
+  const expected = String(text || '').trim();
   input.focus();
   setNativeValue(input, '');
-  for (const char of text || '') {
-    setNativeValue(input, input.value + char);
-    input.dispatchEvent(new KeyboardEvent('keydown', {key: char, bubbles: true}));
-    input.dispatchEvent(new KeyboardEvent('keyup', {key: char, bubbles: true}));
-    await sleep(55 + Math.floor(Math.random() * 60));
-  }
+  await sleep(120);
+  setNativeValue(input, expected);
+  input.dispatchEvent(new KeyboardEvent('keyup', {key: 'Unidentified', bubbles: true}));
+  input.dispatchEvent(new Event('blur', {bubbles: true}));
+  await sleep(350);
+  return normalize(input.value).includes(normalize(expected));
 }
+
+async function fillStreetAutocomplete(input, text) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    status(`Preenchendo logradouro — tentativa ${attempt} de 3...`);
+    input.focus();
+    setNativeValue(input, '');
+    await sleep(180);
+    setNativeValue(input, String(text || '').trim());
+    input.dispatchEvent(new KeyboardEvent('keyup', {key: 'Unidentified', bubbles: true}));
+    await sleep(700);
+    if (await chooseAutocomplete(input, text)) {
+      const current = normalize(input.value);
+      const expected = normalize(text);
+      if (current.includes(expected) || streetHasInternalCode(input)) return true;
+    }
+    setNativeValue(input, '');
+    await sleep(400);
+  }
+  return false;
+}
+
 function labelControl(labelPart, tag = 'input') {
   const wanted = normalize(labelPart);
   const labels = [...document.querySelectorAll('label, td, th, span, div')].filter(el => normalize(el.textContent).replace(/:$/, '') === wanted);
@@ -142,12 +164,28 @@ function parseResults() {
     };
   }).filter(Boolean);
 }
+function readOfficialAddress(fields) {
+  const rawStreet = String(fields.street?.value || '').trim();
+  const codeMatch = rawStreet.match(/\(\s*CL\s*(\d+)\s*\)/i);
+  const street = rawStreet.replace(/\s*\(\s*CL\s*\d+\s*\)\s*/i, '').trim();
+  const selectedNeighborhood = fields.neighborhood?.selectedOptions?.[0]?.textContent?.trim() || '';
+  return {
+    street,
+    street_code: codeMatch ? codeMatch[1] : '',
+    neighborhood: selectedNeighborhood,
+    number: String(fields.number?.value || '').trim(),
+    complement: String(fields.complement?.value || '').trim()
+  };
+}
+
 async function importResults(items) {
   if (!items.length || importInProgress) return;
   importInProgress = true;
   await updateJob({state: STATE.IMPORTING, resultCount: items.length});
   status(`Importando ${items.length} comunicado(s) para o MGT...`);
-  chrome.runtime.sendMessage({type: 'MGT_IMPORT_RESULTS', items}, async response => {
+  const fields = locateFields();
+  const official_address = readOfficialAddress(fields);
+  chrome.runtime.sendMessage({type: 'MGT_IMPORT_RESULTS', items, official_address}, async response => {
     importInProgress = false;
     if (chrome.runtime.lastError) {
       await updateJob({state: STATE.ERROR, error: chrome.runtime.lastError.message});
@@ -182,15 +220,13 @@ async function fill(job) {
   panel(); status('Localizando os campos do portal...');
   const fields = locateFields();
   if (!fields.street || !fields.number || !fields.neighborhood) throw new Error('Não foi possível localizar todos os campos. O portal pode ter mudado.');
-  status('Digitando o logradouro...');
-  await typeLikePerson(fields.street, job.street);
-  if (!await chooseAutocomplete(fields.street, job.street)) throw new Error('O logradouro não foi selecionado na lista da Prefeitura.');
-  status('Logradouro confirmado. Digitando o número...');
-  await typeLikePerson(fields.number, job.number);
-  if (fields.complement && job.complement) { status('Digitando o complemento...'); await typeLikePerson(fields.complement, job.complement); }
+  if (!await fillStreetAutocomplete(fields.street, job.street)) throw new Error('O logradouro não foi selecionado na lista da Prefeitura.');
+  status('Logradouro confirmado. Preenchendo o número...');
+  await fillStable(fields.number, job.number);
+  if (fields.complement && job.complement) { status('Preenchendo o complemento...'); await fillStable(fields.complement, job.complement); }
   status('Selecionando o bairro...');
   chooseNeighborhood(fields.neighborhood, job.neighborhood);
-  if (fields.communication && job.communication) { status('Digitando o número do comunicado...'); await typeLikePerson(fields.communication, job.communication); }
+  if (fields.communication && job.communication) { status('Preenchendo o número do comunicado...'); await fillStable(fields.communication, job.communication); }
   await updateJob({state: STATE.WAITING_CAPTCHA, filledAt: Date.now()});
   observeResults();
 }

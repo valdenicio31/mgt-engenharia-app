@@ -1,0 +1,12 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+staticfiles/
+media/
+.mgt-backup/
+_mgt_backups/
+*.log
+.env
+.DS_Store

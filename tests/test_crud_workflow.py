@@ -41,39 +41,22 @@ class CrudWorkflowTests(TestCase):
         response = self.client.post(reverse("gazette_findings"), {"start_date": "2026-01-01", "end_date": "2026-03-01"}, follow=True)
         self.assertContains(response, "período válido de até 31 dias")
 
-    def test_selected_clients_are_converted_to_opportunities_with_automatic_title(self):
+    # Na versão 1.0 a conversão em massa foi desativada: oportunidade de
+    # Autovistoria só nasce depois da consulta ao portal com autuação
+    # registrada (fluxo Diário Oficial → consulta → autuações → oportunidade).
+    def test_bulk_conversion_shortcut_is_disabled_with_selection(self):
         second = Client.objects.create(name="Condomínio Segundo")
         response = self.client.post(
             reverse("clients_to_opportunities"),
             {"client_ids": [self.condominium.pk, second.pk]},
             follow=True,
         )
-        self.assertContains(response, "2 oportunidade(s) criada(s) com sucesso")
-        self.assertTrue(Opportunity.objects.filter(
-            client=self.condominium,
-            title="Autovistoria — Condomínio Teste",
-            stage="lead",
-            owner=self.user,
-        ).exists())
-        self.assertTrue(Opportunity.objects.filter(
-            client=second,
-            title="Autovistoria — Condomínio Segundo",
-        ).exists())
+        self.assertContains(response, "A criação direta foi desativada")
+        self.assertEqual(Opportunity.objects.count(), 0)
 
-    def test_bulk_conversion_does_not_duplicate_existing_opportunity(self):
-        title = "Autovistoria — Condomínio Teste"
-        Opportunity.objects.create(client=self.condominium, title=title, owner=self.user)
-        response = self.client.post(
-            reverse("clients_to_opportunities"),
-            {"client_ids": [self.condominium.pk]},
-            follow=True,
-        )
-        self.assertContains(response, "1 registro(s) foram ignorados")
-        self.assertEqual(Opportunity.objects.filter(client=self.condominium, title=title).count(), 1)
-
-    def test_bulk_conversion_requires_selection(self):
+    def test_bulk_conversion_shortcut_is_disabled_without_selection(self):
         response = self.client.post(reverse("clients_to_opportunities"), follow=True)
-        self.assertContains(response, "Selecione pelo menos um condomínio")
+        self.assertContains(response, "A criação direta foi desativada")
         self.assertEqual(Opportunity.objects.count(), 0)
 
     def test_autovistoria_workflow_creates_and_updates_without_duplicate(self):
@@ -83,19 +66,33 @@ class CrudWorkflowTests(TestCase):
         self.condominium.save()
         page = self.client.get(reverse("client_autovistoria", args=(self.condominium.pk,)))
         self.assertContains(page, "Rua das Flores")
-        self.assertContains(page, "Abrir portal da Prefeitura")
+        self.assertContains(page, "Abrir manualmente")
+        # fluxo atual: registrar ao menos uma autuação e só então gerar a oportunidade
         payload = {
             "communication_number": "COM-123",
-            "consultation_status": "Sem comunicado vigente",
-            "consultation_notes": "Consulta manual concluída.",
+            "infraction_number": "AUT-001",
+            "infraction_type": "Fachada",
+            "description": "Recuperar revestimento da fachada.",
+            "status": "ativa",
+            "source_url": "https://autovistoria.rio.rj.gov.br/ConsultaPublica.php",
         }
-        response = self.client.post(reverse("client_autovistoria", args=(self.condominium.pk,)), payload, follow=True)
-        self.assertContains(response, "Oportunidade criada a partir da consulta")
+        self.client.post(reverse("client_autovistoria", args=(self.condominium.pk,)), payload, follow=True)
+        self.assertEqual(self.condominium.autovistoria_infractions.count(), 1)
+
+        response = self.client.post(
+            reverse("client_autovistoria_create_opportunity", args=(self.condominium.pk,)), follow=True
+        )
+        self.assertContains(response, "Oportunidade criada com 1 autuação(ões)")
         opportunity = Opportunity.objects.get(client=self.condominium, communication_number="COM-123")
         self.assertEqual(opportunity.source, "Autovistoria Rio")
-        self.assertEqual(opportunity.consultation_status, "Sem comunicado vigente")
-        payload["consultation_status"] = "Comunicado localizado"
-        self.client.post(reverse("client_autovistoria", args=(self.condominium.pk,)), payload)
-        self.assertEqual(Opportunity.objects.filter(client=self.condominium, communication_number="COM-123").count(), 1)
-        opportunity.refresh_from_db()
-        self.assertEqual(opportunity.consultation_status, "Comunicado localizado")
+        self.assertEqual(opportunity.title, "Autovistoria — Condomínio Teste")
+
+        # nova autuação + nova geração deve ATUALIZAR a mesma oportunidade, sem duplicar
+        payload["infraction_number"] = "AUT-002"
+        payload["description"] = "Revisar para-raios."
+        self.client.post(reverse("client_autovistoria", args=(self.condominium.pk,)), payload, follow=True)
+        response = self.client.post(
+            reverse("client_autovistoria_create_opportunity", args=(self.condominium.pk,)), follow=True
+        )
+        self.assertContains(response, "Oportunidade atualizada com 1 autuação(ões)")
+        self.assertEqual(Opportunity.objects.filter(client=self.condominium).count(), 1)

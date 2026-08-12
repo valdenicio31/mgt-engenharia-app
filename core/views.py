@@ -35,7 +35,12 @@ def autovistoria_landing(request):
     whatsapp_url = "https://wa.me/5521975164643"
     if request.method == "POST" and form.is_valid():
         with transaction.atomic():
-            lead = form.save()
+            lead = form.save(commit=False)
+            # rastreio de canal: o formulário posta pra própria URL, então os
+            # parâmetros utm_* da divulgação (instagram/facebook/whatsapp) se preservam
+            utm_source = (request.GET.get("utm_source") or "").strip()[:20]
+            lead.source = f"Landing · {utm_source}" if utm_source else "Landing Page"
+            lead.save()
             document = "".join(char for char in lead.document if char.isdigit())
             client = None
             if document:
@@ -160,16 +165,15 @@ def _crud(request, model, form_class, title, template="generic_list.html"):
         search = (request.GET.get("q") or "").strip()
         city = (request.GET.get("cidade") or "").strip()
         neighborhood = (request.GET.get("bairro") or "").strip()
-        commercial_status = (request.GET.get("situacao") or "").strip()
+        validation = (request.GET.get("validacao") or "").strip()
         if search:
             items = items.filter(Q(name__icontains=search) | Q(document__icontains=search) | Q(street__icontains=search) | Q(process_number__icontains=search) | Q(notification_number__icontains=search))
         if city:
             items = items.filter(city__iexact=city)
         if neighborhood:
             items = items.filter(neighborhood__iexact=neighborhood)
-        if commercial_status:
-            filtered_ids = [item.pk for item in items if item.commercial_status_code == commercial_status]
-            items = items.filter(pk__in=filtered_ids)
+        if validation:
+            items = items.filter(validation=validation)
         allowed_sorts = {
             "nome": "name", "rua": "street", "bairro": "neighborhood", "cidade": "city",
             "processo": "process_number", "notificacao": "notification_number", "atualizado": "updated_at",
@@ -185,7 +189,7 @@ def _crud(request, model, form_class, title, template="generic_list.html"):
         else:
             items = items.order_by(f"{prefix}{sort_field}", "name")
         filters = {
-            "q": search, "cidade": city, "bairro": neighborhood, "situacao": commercial_status,
+            "q": search, "cidade": city, "bairro": neighborhood, "validacao": validation,
             "cities": Client.objects.exclude(city="").values_list("city", flat=True).distinct().order_by("city"),
             "neighborhoods": Client.objects.exclude(neighborhood="").values_list("neighborhood", flat=True).distinct().order_by("neighborhood"),
         }
@@ -379,14 +383,6 @@ def client_autovistoria_robot_import(request, pk):
 @require_POST
 def client_autovistoria_create_opportunity(request, pk):
     client = get_object_or_404(Client, pk=pk, active=True)
-    missing_fields = client.commercial_missing_fields()
-    if missing_fields:
-        messages.warning(
-            request,
-            "Complete o cadastro antes de gerar a oportunidade. Campos pendentes: " + ", ".join(missing_fields) + ".",
-        )
-        return redirect("clients")
-
     pending = list(client.autovistoria_infractions.filter(opportunity__isnull=True))
     if not pending:
         messages.warning(request, "Nenhuma autuação nova foi registrada. Consulte o portal e importe ao menos uma autuação antes de gerar a oportunidade.")
@@ -416,9 +412,6 @@ def client_autovistoria_create_opportunity(request, pk):
         opportunity.source_url = latest.source_url or "https://autovistoria.rio.rj.gov.br/ConsultaPublica.php"
         opportunity.consulted_at = timezone.now()
         opportunity.save()
-        if client.validation != "confirmado":
-            client.validation = "confirmado"
-            client.save(update_fields=("validation", "updated_at"))
         AutovistoriaInfraction.objects.filter(pk__in=[item.pk for item in pending]).update(opportunity=opportunity)
         AuditLog.objects.create(
             actor=request.user,
@@ -667,3 +660,19 @@ def gazette_findings(request):
         return redirect("gazette_findings")
     return render(request, "gazette_findings.html", {"items": GazetteFinding.objects.select_related("client").all()[:200]})
 
+
+
+@login_required
+def help_center(request):
+    modules = [
+        {"slug": "visao-geral", "title": "Visão geral", "objective": "Apresentar os principais indicadores operacionais e comerciais do MGT.", "steps": ["Acompanhe os totais e pendências.", "Use os atalhos para acessar os módulos.", "Confira os dados após importações e atualizações."]},
+        {"slug": "clientes", "title": "Clientes e condomínios", "objective": "Centralizar o cadastro mestre dos condomínios e identificar a origem de cada registro.", "steps": ["Cadastre manualmente pelo botão Novo condomínio.", "Importe arquivos pela opção Importar arquivo.", "Consulte a coluna Origem para saber se o registro é manual, de arquivo ou do Diário Oficial.", "Use Alterar, Consultar Autovistoria e Excluir conforme a necessidade."]},
+        {"slug": "diario-oficial", "title": "Diário Oficial", "objective": "Localizar intimações de autovistoria e transformá-las em clientes e oportunidades comerciais.", "steps": ["Informe o período desejado.", "Execute a pesquisa.", "O sistema registra as publicações encontradas.", "Quando aplicável, cria ou atualiza o cliente com origem Diário Oficial.", "Gera automaticamente a oportunidade comercial sem duplicar registros equivalentes."]},
+        {"slug": "oportunidades", "title": "Oportunidades", "objective": "Acompanhar o funil comercial desde o lead até o fechamento.", "steps": ["Revise as oportunidades criadas automaticamente.", "Defina responsável, etapa e valor estimado.", "Registre o avanço para qualificação, proposta, negociação, ganha ou perdida."]},
+        {"slug": "autovistoria", "title": "Autovistoria", "objective": "Consultar autuações e vincular as exigências ao condomínio e à oportunidade.", "steps": ["Abra o cliente e clique em Consultar Autovistoria.", "Execute o robô assistido ou registre a contingência manual.", "Revise as autuações encontradas.", "Gere a oportunidade quando houver pendências ainda não vinculadas."]},
+        {"slug": "propostas", "title": "Propostas", "objective": "Registrar e acompanhar propostas comerciais vinculadas às oportunidades.", "steps": ["Crie a proposta a partir da oportunidade.", "Informe valores e status.", "Atualize o andamento até aceite ou recusa."]},
+        {"slug": "projetos", "title": "Projetos", "objective": "Controlar os serviços contratados e sua execução.", "steps": ["Cadastre o projeto após o fechamento.", "Vincule cliente, responsáveis e datas.", "Acompanhe o status até a conclusão."]},
+        {"slug": "tarefas", "title": "Tarefas", "objective": "Organizar atividades e pendências da equipe.", "steps": ["Crie a tarefa.", "Defina responsável e prazo.", "Atualize o status conforme a execução."]},
+        {"slug": "rat", "title": "RAT", "objective": "Registrar atendimentos e serviços técnicos realizados.", "steps": ["Crie a RAT vinculada ao cliente ou projeto.", "Descreva o serviço executado.", "Finalize e preserve o histórico técnico."]},
+    ]
+    return render(request, "help_center.html", {"modules": modules, "system_objective": "Transformar informações públicas e operacionais em clientes, oportunidades e serviços rastreáveis para a MGT Engenharia."})

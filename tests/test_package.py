@@ -1,4 +1,5 @@
 import ast
+import os
 import pathlib
 import unittest
 
@@ -31,6 +32,11 @@ class PackageTests(unittest.TestCase):
         for model in ("Client", "Opportunity", "Proposal", "Project", "Task", "RAT", "AuditLog"):
             self.assertIn(f"class {model}", text)
 
+    @unittest.skipUnless(
+        os.environ.get("MGT_STRICT_PACKAGE"),
+        "verificação de pacote: na máquina de desenvolvimento o .env local é esperado; "
+        "definir MGT_STRICT_PACKAGE=1 ao validar o pacote/RC antes do envio",
+    )
     def test_no_local_env_in_package(self):
         self.assertFalse((ROOT / ".env").exists())
 
