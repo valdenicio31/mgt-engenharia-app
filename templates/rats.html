@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block heading %}{{ title }}{% endblock %}
+{% block content %}
+<section class="clients-layout{% if not show_form %} clients-layout-list-only{% endif %}">
+  <article class="panel clients-list">
+    <div class="records-heading">
+      <div><h2>📝 RATs diárias</h2><small>Uma RAT por dia para cada projeto em execução — elas alimentam as medições de cobrança.</small></div>
+      <div class="data-actions">
+        <a class="primary-button" href="{% url 'rats' %}?novo=1">➕ Nova RAT</a>
+        {% if user_role != 'tecnico' %}<details class="export-menu"><summary>📤 Exportar</summary><div><a href="{% url 'records_export' 'rats' 'xlsx' %}">Excel (.xlsx)</a><a href="{% url 'records_export' 'rats' 'csv' %}">CSV (.csv)</a><a href="{% url 'records_export' 'rats' 'txt' %}">Texto (.txt)</a><a href="{% url 'records_export' 'rats' 'xml' %}">XML (.xml)</a></div></details>{% endif %}
+      </div>
+    </div>
+
+    {% if missing_today %}
+    <div class="bulk-actions" aria-label="Projetos sem RAT hoje">
+      <strong>⚠️ Sem RAT hoje ({{ today|date:'d/m' }}):</strong>
+      {% for projeto in missing_today %}<a class="action-link" href="{% url 'rats' %}?projeto={{ projeto.pk }}">📝 {{ projeto.name }}</a>{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="table-scroll"><table><thead><tr><th>Data</th><th>Projeto</th><th>Técnico</th><th>Descrição</th><th>Cliente aprovou</th><th>Medição</th><th>Ações</th></tr></thead><tbody>
+    {% for item in items %}<tr>
+      <td><strong>{{ item.service_date|date:'d/m/Y' }}</strong></td>
+      <td>{{ item.project }}</td>
+      <td>{{ item.technician.get_full_name|default:item.technician.username }}</td>
+      <td>{{ item.description|truncatechars:90 }}</td>
+      <td>{% if item.approved_by_client %}✅ Sim{% else %}—{% endif %}</td>
+      <td>{% if item.measurement %}<span class="tag t-blue">Medição {{ item.measurement.number }}</span>{% else %}<small>em aberto</small>{% endif %}</td>
+      <td class="row-actions"><a class="action-link" href="?editar={{ item.pk }}">✏️ Alterar</a>{% if user_role == 'admin' %}<form method="post" action="{% url 'record_delete' 'rats' item.pk %}" onsubmit="return confirm('Confirma a exclusão desta RAT?')">{% csrf_token %}<button class="danger-link" type="submit">🗑️ Excluir</button></form>{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="7">Nenhuma RAT registrada.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </article>
+
+  {% if show_form %}
+  <article class="panel client-form-panel"><div class="form-panel-heading"><h2>{% if editing %}Alterar RAT{% else %}RAT do dia{% endif %}</h2><a class="secondary-button" href="{% url 'rats' %}">✖ Fechar</a></div>
+    <form method="post" class="form">{% csrf_token %}{% if form.non_field_errors %}<div class="error">{{ form.non_field_errors }}</div>{% endif %}{{ form.as_p }}
+      <div class="form-actions"><button type="submit">💾 Salvar RAT</button><a class="secondary-button" href="{% url 'rats' %}">✖ Cancelar</a></div>
+    </form>
+  </article>
+  {% endif %}
+</section>
+{% endblock %}

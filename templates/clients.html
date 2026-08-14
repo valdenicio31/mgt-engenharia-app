@@ -7,10 +7,15 @@
       <div><h2>🏢 Condomínios cadastrados</h2><small>Consulte, filtre, ordene e selecione os condomínios da base.</small></div>
       <div class="data-actions">
         <a class="primary-button" href="{% url 'clients' %}?novo=1">➕ Novo condomínio</a>
-        <form action="{% url 'clients_import' %}" method="post" enctype="multipart/form-data" class="import-form">{% csrf_token %}
+        {% if user_role != 'tecnico' %}<form action="{% url 'clients_import' %}" method="post" enctype="multipart/form-data" class="import-form">{% csrf_token %}
           <label class="file-button">📥 Importar arquivo<input type="file" name="file" accept=".xlsx,.csv,.txt,.xml" required onchange="this.form.submit()"></label>
         </form>
-        <details class="export-menu"><summary>📤 Exportar</summary><div><a href="{% url 'clients_export' 'xlsx' %}">Excel (.xlsx)</a><a href="{% url 'clients_export' 'csv' %}">CSV (.csv)</a><a href="{% url 'clients_export' 'txt' %}">Texto (.txt)</a><a href="{% url 'clients_export' 'xml' %}">XML (.xml)</a></div></details>
+        <details class="export-menu"><summary>📤 Exportar</summary><div>
+          <strong class="export-scope-title">Todos os registros</strong>
+          <a href="{% url 'clients_export' 'xlsx' %}">Excel (.xlsx)</a><a href="{% url 'clients_export' 'csv' %}">CSV (.csv)</a><a href="{% url 'clients_export' 'txt' %}">Texto (.txt)</a><a href="{% url 'clients_export' 'xml' %}">XML (.xml)</a>
+          <strong class="export-scope-title">Somente a visão atual</strong>
+          <a href="{% url 'clients_export' 'xlsx' %}?escopo=visao&{{ request.GET.urlencode }}">Excel (.xlsx)</a><a href="{% url 'clients_export' 'csv' %}?escopo=visao&{{ request.GET.urlencode }}">CSV (.csv)</a><a href="{% url 'clients_export' 'txt' %}?escopo=visao&{{ request.GET.urlencode }}">Texto (.txt)</a><a href="{% url 'clients_export' 'xml' %}?escopo=visao&{{ request.GET.urlencode }}">XML (.xml)</a>
+        </div></details>{% endif %}
       </div>
     </div>
     <form method="get" class="client-filters">
@@ -42,7 +47,7 @@
       <td class="select-column"><input class="client-selector" type="checkbox" value="{{ item.pk }}" data-consult-url="{% url 'client_autovistoria' item.pk %}" aria-label="Selecionar {{ item.name }}"></td>
       <td class="condo-photo-cell">{% if item.photo %}<img src="{{ item.photo.url }}" alt="Foto de {{ item.name }}">{% else %}<span>🏢</span>{% endif %}</td>
       <td><strong>{{ item.name }}</strong></td><td>{{ item.street|default:'—' }}{% if item.address_number %}, {{ item.address_number }}{% endif %}</td><td>{{ item.neighborhood|default:'—' }}</td><td>{{ item.process_number|default:'—' }}</td><td>{{ item.notification_number|default:'—' }}</td><td><span class="tag origin-{{ item.origin }}">{{ item.get_origin_display }}</span></td><td><span class="status status-{{ item.validation }}">{{ item.get_validation_display }}</span></td><td>{{ item.autovistoria_infractions.count }}</td>
-      <td class="row-actions"><a class="action-link" href="{% url 'client_autovistoria' item.pk %}">🌐 Consultar</a><a class="action-link" href="?editar={{ item.pk }}">✏️ Alterar</a><form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">🗑️ Excluir</button></form></td>
+      <td class="row-actions"><a class="action-link" href="{% url 'client_autovistoria' item.pk %}">🌐 Consultar</a><a class="action-link" target="_blank" href="{% url 'client_contract' item.pk %}">📄 Contrato</a><a class="action-link" href="?editar={{ item.pk }}">✏️ Alterar</a>{% if user_role == 'admin' %}<form method="post" action="{% url 'record_delete' 'clientes' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste cliente/condomínio?')">{% csrf_token %}<button class="danger-link" type="submit">🗑️ Excluir</button></form>{% endif %}</td>
     </tr>{% empty %}<tr><td colspan="11">Nenhum condomínio encontrado.</td></tr>{% endfor %}
     </tbody></table></div>
     <div id="excel-filter-menu" class="excel-filter-menu" hidden>

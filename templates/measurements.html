@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block heading %}{{ title }}{% endblock %}
+{% block content %}
+<section class="grid">
+  <article class="panel">
+    <div class="records-heading">
+      <div><h2>💰 Medições de cobrança</h2><small>Cada medição consolida automaticamente as RATs em aberto do projeto. Sinal de 30% na assinatura; saldo por medição, parcelável em até 3x no cartão.</small></div>
+      {% if user_role != 'tecnico' %}<details class="export-menu"><summary>📤 Exportar</summary><div><a href="{% url 'records_export' 'medicoes' 'xlsx' %}">Excel (.xlsx)</a><a href="{% url 'records_export' 'medicoes' 'csv' %}">CSV (.csv)</a><a href="{% url 'records_export' 'medicoes' 'txt' %}">Texto (.txt)</a><a href="{% url 'records_export' 'medicoes' 'xml' %}">XML (.xml)</a></div></details>{% endif %}
+    </div>
+    <div class="table-scroll"><table><thead><tr><th>Medição</th><th>Projeto</th><th>Cliente</th><th>Valor (R$)</th><th>Situação</th><th>RATs consolidadas</th><th>Criada em</th><th>Ações</th></tr></thead><tbody>
+    {% for item in items %}<tr>
+      <td><strong>Nº {{ item.number }}</strong></td>
+      <td>{{ item.project.name }}</td>
+      <td>{{ item.project.client.name }}</td>
+      <td>{% if item.amount %}{{ item.amount|floatformat:2 }}{% else %}—{% endif %}</td>
+      <td><span class="status status-{{ item.status }}">{{ item.get_status_display }}</span></td>
+      <td>{{ item.rats.count }} RAT(s){% if item.rats.all %}<br><small>{% for rat in item.rats.all|slice:':5' %}{{ rat.service_date|date:'d/m' }}{% if not forloop.last %} · {% endif %}{% endfor %}{% if item.rats.count > 5 %} …{% endif %}</small>{% endif %}</td>
+      <td>{{ item.created_at|date:'d/m/Y' }}</td>
+      <td class="row-actions">{% if user_role == 'admin' %}<form method="post" action="{% url 'record_delete' 'medicoes' item.pk %}" onsubmit="return confirm('Confirma a exclusão desta medição? As RATs voltam a ficar em aberto.')">{% csrf_token %}<button class="danger-link" type="submit">🗑️ Excluir</button></form>{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="8">Nenhuma medição gerada.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </article>
+  <article class="panel"><h2>➕ Gerar medição</h2>
+    <p><small>Ao salvar, todas as RATs do projeto que ainda não pertencem a uma medição são consolidadas nesta cobrança.</small></p>
+    <form method="post" class="form">{% csrf_token %}{% if form.non_field_errors %}<div class="error">{{ form.non_field_errors }}</div>{% endif %}{{ form.as_p }}<button type="submit">💾 Gerar medição</button></form>
+  </article>
+</section>
+{% endblock %}

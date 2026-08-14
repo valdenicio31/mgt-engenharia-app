@@ -1,0 +1,83 @@
+{% load static %}
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Laudo de conclusão — {{ project.name }}</title><style>
+@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#25222a;max-width:840px;margin:28px auto;line-height:1.5;font-size:13.5px}
+.actions{margin-bottom:18px}.actions button{background:#1F5AA8;color:#fff;border:0;border-radius:7px;padding:10px 16px;font-weight:700;cursor:pointer}
+.doc{border:1px solid #d8e0ec;box-shadow:0 8px 30px rgba(16,55,98,.08);padding:34px 42px 24px}
+.header{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #1F5AA8;padding-bottom:16px;margin-bottom:20px}.logo{height:84px;width:auto}.header-note{text-align:right;color:#5b6b7f;font-size:12px}
+h1{font-size:17px;text-align:center;color:#103762;margin:6px 0 18px;text-transform:uppercase;letter-spacing:.03em}
+h2{font-size:13.5px;color:#1F5AA8;margin:20px 0 6px;text-transform:uppercase;letter-spacing:.03em}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin:8px 0}
+th,td{border:1px solid #d8e0ec;padding:7px 9px;text-align:left;vertical-align:top}
+th{background:#e7f0fb;color:#103762;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:12px 0}
+.kpis div{border:1px solid #d8e0ec;border-radius:8px;padding:10px 12px;text-align:center}
+.kpis b{display:block;font-size:18px;color:#103762}.kpis span{font-size:11px;color:#5b6b7f}
+.bar-chart{margin:14px 0}
+.bar-row{display:flex;align-items:center;gap:10px;margin:8px 0}
+.bar-row label{width:150px;font-size:12px;font-weight:700;color:#103762}
+.bar-track{flex:1;background:#eef2f7;border-radius:6px;height:26px;position:relative}
+.bar-fill{height:26px;border-radius:6px;display:flex;align-items:center;padding:0 10px;color:#fff;font-weight:700;font-size:12px;min-width:56px}
+.bar-planejado{background:#1F5AA8}.bar-executado{background:#7FBE41}
+.destaque{background:#e6f4ec;border-left:5px solid #7FBE41;padding:10px 14px;margin:12px 0;font-weight:700}
+.alerta{background:#fdf3dc;border-left:5px solid #F7B500;padding:10px 14px;margin:12px 0}
+.assinaturas{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:46px;text-align:center}
+.assinaturas div{border-top:1px solid #25222a;padding-top:6px;font-size:12.5px}
+.footer{border-top:1px solid #d0d8e4;margin-top:30px;padding-top:12px;display:flex;justify-content:space-between;gap:20px;font-size:10.5px;color:#6b7280}
+@media print{body{margin:0;max-width:none}.actions{display:none}.doc{border:0;box-shadow:none;padding:0}}
+</style></head><body>
+<div class="actions"><button type="button" onclick="window.print()">🖨️ Imprimir ou salvar em PDF</button></div>
+<main class="doc">
+<header class="header"><img class="logo" src="{% static 'img/logo_mgt.png' %}" alt="MGT Engenharia — Tecnologia em Engenharia"><div class="header-note"><strong>MGT Engenharia</strong><br>Tel: (21) 97516-4643 · (21) 98814-5058<br>mgtengenharia.ia@gmail.com<br>CNPJ: 10.652.916/0001-80</div></header>
+
+<h1>Laudo de conclusão de projeto</h1>
+
+<h2>1. Identificação</h2>
+<table>
+  <tr><th style="width:180px">Projeto</th><td>{{ project.name }}</td></tr>
+  <tr><th>Cliente / condomínio</th><td>{{ project.client.name }}{% if project.client.document %} — CNPJ/CPF {{ project.client.document }}{% endif %}</td></tr>
+  <tr><th>Gestor responsável</th><td>{{ project.manager.get_full_name|default:project.manager.username }}</td></tr>
+  <tr><th>Situação</th><td>{{ project.get_status_display }} · progresso {{ project.progress }}%</td></tr>
+  <tr><th>Período planejado</th><td>{% if project.start_date %}{{ project.start_date|date:'d/m/Y' }} a {{ project.planned_end_date|date:'d/m/Y'|default:'—' }}{% else %}Não informado{% endif %}</td></tr>
+  <tr><th>Período executado</th><td>{% if first_rat %}{{ first_rat.service_date|date:'d/m/Y' }} a {{ last_rat.service_date|date:'d/m/Y' }} (conforme RATs){% else %}Sem RATs registradas{% endif %}</td></tr>
+</table>
+
+<h2>2. Dashboard — planejado × executado</h2>
+<div class="kpis">
+  <div><b>{{ planned_days|default:'—' }}</b><span>dias planejados</span></div>
+  <div><b>{{ executed_days }}</b><span>dias executados</span></div>
+  <div><b>{{ tasks_done }}/{{ tasks|length }}</b><span>tarefas concluídas</span></div>
+  <div><b>{{ rats|length }}</b><span>RATs emitidas</span></div>
+</div>
+<div class="bar-chart">
+  <div class="bar-row"><label>Planejado</label><div class="bar-track"><div class="bar-fill bar-planejado" style="width:{{ planned_pct }}%">{{ planned_days|default:'n/i' }}{% if planned_days %} dias{% endif %}</div></div></div>
+  <div class="bar-row"><label>Executado</label><div class="bar-track"><div class="bar-fill bar-executado" style="width:{{ executed_pct }}%">{{ executed_days }} dias</div></div></div>
+</div>
+{% if planned_days and executed_days %}
+  {% if executed_days <= planned_days %}<div class="destaque">✅ Projeto executado dentro do prazo planejado ({{ executed_days }} de {{ planned_days }} dias).</div>
+  {% else %}<div class="alerta">⚠️ Execução superou o planejado em {{ delay_days }} dia(s) — detalhes registrados nas RATs.</div>{% endif %}
+{% endif %}
+
+<h2>3. Tarefas do projeto</h2>
+<table><thead><tr><th>Tarefa</th><th>Responsável</th><th>Prazo</th><th>Situação</th></tr></thead><tbody>
+{% for task in tasks %}<tr><td>{{ task.title }}</td><td>{{ task.assignee.get_full_name|default:task.assignee.username }}</td><td>{{ task.due_date|date:'d/m/Y'|default:'—' }}</td><td>{% if task.completed %}✅ Concluída{% else %}Em aberto{% endif %}</td></tr>
+{% empty %}<tr><td colspan="4">Nenhuma tarefa cadastrada.</td></tr>{% endfor %}
+</tbody></table>
+
+<h2>4. Medições de cobrança</h2>
+<table><thead><tr><th>Medição</th><th>RATs consolidadas</th><th>Valor (R$)</th><th>Situação</th></tr></thead><tbody>
+{% for medicao in medicoes %}<tr><td><strong>Nº {{ medicao.number }}</strong></td><td>{{ medicao.rats.count }}</td><td>{{ medicao.amount|floatformat:2 }}</td><td>{{ medicao.get_status_display }}</td></tr>
+{% empty %}<tr><td colspan="4">Nenhuma medição gerada.</td></tr>{% endfor %}
+{% if medicoes %}<tr><th colspan="2">Total medido</th><th colspan="2">R$ {{ total_medido|floatformat:2 }}</th></tr>{% endif %}
+</tbody></table>
+
+<h2>5. Conclusão</h2>
+<p>Atestamos que os serviços do projeto <strong>{{ project.name }}</strong> foram executados conforme registrado nos {{ rats|length }} Relatórios de Atendimento Técnico (RATs) emitidos ao longo da execução, consolidados nas medições relacionadas acima. As atividades encontram-se {% if project.status == 'concluido' %}<strong>concluídas</strong>{% else %}na situação "{{ project.get_status_display }}"{% endif %}, permanecendo a MGT Engenharia à disposição para esclarecimentos técnicos.</p>
+
+<p style="margin-top:26px">Rio de Janeiro, {% now "d/m/Y" %}.</p>
+<div class="assinaturas">
+  <div><strong>MGT Engenharia</strong><br>Márcio Guimarães — Responsável Técnico</div>
+  <div><strong>{{ project.client.name }}</strong><br>Síndico(a) / Representante legal</div>
+</div>
+
+<footer class="footer"><div>MGT Engenharia — Tecnologia em Engenharia<br>📞 (21) 97516-4643 · (21) 98814-5058 · ✉️ mgtengenharia.ia@gmail.com</div><div style="text-align:right;font-weight:700">Criação ViaIA Soluções em IA<br>@by viaia 2026</div></footer>
+</main></body></html>

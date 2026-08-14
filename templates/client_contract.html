@@ -1,0 +1,78 @@
+{% load static %}
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Contrato de prestação de serviço — {{ client.name }}</title><style>
+@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#25222a;max-width:840px;margin:28px auto;line-height:1.5;font-size:13.5px}
+.actions{margin-bottom:18px;display:flex;gap:10px;align-items:center}.actions button{background:#1F5AA8;color:#fff;border:0;border-radius:7px;padding:10px 16px;font-weight:700;cursor:pointer}.actions form{display:flex;gap:6px;align-items:center;font-size:12.5px}.actions input{width:64px;padding:6px;border:1px solid #c9d4e4;border-radius:6px}
+.doc{border:1px solid #d8e0ec;box-shadow:0 8px 30px rgba(16,55,98,.08);padding:34px 42px 24px}
+.header{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #1F5AA8;padding-bottom:16px;margin-bottom:20px}.logo{height:84px;width:auto}.header-note{text-align:right;color:#5b6b7f;font-size:12px}
+h1{font-size:17px;text-align:center;color:#103762;margin:6px 0 18px;text-transform:uppercase;letter-spacing:.03em}
+h2{font-size:13.5px;color:#1F5AA8;margin:20px 0 6px;text-transform:uppercase;letter-spacing:.03em}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin:8px 0}
+th,td{border:1px solid #d8e0ec;padding:7px 9px;text-align:left;vertical-align:top}
+th{background:#e7f0fb;color:#103762;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
+.partes{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:10px 0}
+.parte{border:1px solid #d8e0ec;border-radius:8px;padding:12px 14px}.parte b{color:#1F5AA8}
+.destaque{background:#fdf3dc;border-left:5px solid #F7B500;padding:10px 14px;margin:10px 0;font-weight:700}
+.valor-box{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:10px 0}
+.valor-box div{border:1px solid #d8e0ec;border-radius:8px;padding:10px 12px;text-align:center}
+.valor-box b{display:block;font-size:16px;color:#103762}.valor-box span{font-size:11.5px;color:#5b6b7f}
+.assinaturas{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:46px;text-align:center}
+.assinaturas div{border-top:1px solid #25222a;padding-top:6px;font-size:12.5px}
+.footer{border-top:1px solid #d0d8e4;margin-top:30px;padding-top:12px;display:flex;justify-content:space-between;gap:20px;font-size:10.5px;color:#6b7280}
+.obs{font-size:11.5px;color:#5b6b7f;font-style:italic}
+@media print{body{margin:0;max-width:none}.actions{display:none}.doc{border:0;box-shadow:none;padding:0}}
+</style></head><body>
+<div class="actions"><button type="button" onclick="window.print()">🖨️ Imprimir ou salvar em PDF</button>
+<form method="get">Prazo (semanas): <input type="number" name="semanas" min="2" max="52" value="{{ weeks }}">{% if opportunity %}<input type="hidden" name="oportunidade" value="{{ opportunity.pk }}">{% endif %}<button type="submit">Recalcular</button></form></div>
+<main class="doc">
+<header class="header"><img class="logo" src="{% static 'img/logo_mgt.png' %}" alt="MGT Engenharia — Tecnologia em Engenharia"><div class="header-note"><strong>MGT Engenharia</strong><br>Tel: (21) 97516-4643 · (21) 98814-5058<br>mgtengenharia.ia@gmail.com<br>CNPJ: 10.652.916/0001-80</div></header>
+
+<h1>Contrato de prestação de serviços de engenharia</h1>
+
+<h2>1. Partes</h2>
+<div class="partes">
+  <div class="parte"><b>CONTRATADA</b><br>MGT Engenharia<br>CNPJ: 10.652.916/0001-80<br>Responsável Técnico: Márcio Guimarães<br>Rio de Janeiro — RJ</div>
+  <div class="parte"><b>CONTRATANTE</b><br>{{ client.name }}{% if client.document %}<br>CNPJ/CPF: {{ client.document }}{% endif %}<br>{{ client.street }}{% if client.address_number %}, {{ client.address_number }}{% endif %}{% if client.complement %} — {{ client.complement }}{% endif %}<br>{% if client.neighborhood %}{{ client.neighborhood }} — {% endif %}{{ client.city }} — {{ client.state }}{% if client.postal_code %} · CEP {{ client.postal_code }}{% endif %}{% if client.phone %}<br>Tel: {{ client.phone }}{% endif %}{% if client.email %}<br>{{ client.email }}{% endif %}</div>
+</div>
+
+<h2>2. Objeto — discriminação do serviço</h2>
+<p>Prestação de serviços técnicos de engenharia consistentes em <strong>{% if opportunity %}{{ opportunity.title }}{% else %}Autovistoria predial e apoio técnico à regularização do condomínio{% endif %}</strong>, compreendendo: vistoria técnica das áreas comuns e sistemas da edificação, análise das condições de conservação, emissão de laudo técnico com responsabilidade profissional (ART/RRT) e orientação das providências necessárias.</p>
+{% if infractions %}<p>Integram o escopo o tratamento técnico dos seguintes registros identificados junto aos órgãos públicos:</p>
+<table><thead><tr><th>Autuação</th><th>Tipo</th><th>Situação</th><th>Descrição / exigência</th></tr></thead><tbody>
+{% for item in infractions %}<tr><td>{{ item.infraction_number }}</td><td>{{ item.infraction_type|default:'—' }}</td><td>{{ item.get_status_display }}</td><td>{{ item.description|truncatechars:160 }}</td></tr>{% endfor %}
+</tbody></table>{% endif %}
+
+<h2>3. Prazo e cronograma de execução</h2>
+<p>O serviço será executado no prazo estimado de <strong>{{ weeks }} semanas</strong>, contadas da assinatura deste contrato e do pagamento do sinal, conforme o cronograma abaixo:</p>
+<table><thead><tr><th>Etapa</th><th>Descrição</th><th>Período</th></tr></thead><tbody>
+{% for etapa, descricao, periodo in cronograma %}<tr><td><strong>{{ etapa }}</strong></td><td>{{ descricao }}</td><td>{{ periodo }}</td></tr>{% endfor %}
+</tbody></table>
+<p class="obs">O cronograma poderá ser ajustado de comum acordo em função de condições de acesso, clima ou dependências de terceiros, mantendo-se o registro das alterações.</p>
+
+<h2>4. Preço e forma de pagamento</h2>
+{% if total %}<div class="valor-box">
+  <div><b>R$ {{ total|floatformat:2 }}</b><span>Valor total do serviço</span></div>
+  <div><b>R$ {{ sinal|floatformat:2 }}</b><span>Sinal de 30% na assinatura</span></div>
+  <div><b>R$ {{ saldo|floatformat:2 }}</b><span>Saldo conforme medições</span></div>
+</div>{% else %}<div class="destaque">Valor total do serviço: R$ ____________ (preencher conforme proposta aceita)</div>{% endif %}
+<p>O pagamento observará as seguintes condições:</p>
+<table><thead><tr><th>Parcela</th><th>Critério</th><th>Valor</th></tr></thead><tbody>
+{% for nome, criterio, valor in medicoes %}<tr><td><strong>{{ nome }}</strong></td><td>{{ criterio }}</td><td>{% if valor %}R$ {{ valor|floatformat:2 }}{% else %}Conforme medição{% endif %}</td></tr>{% endfor %}
+</tbody></table>
+<div class="destaque">💳 Sinal de 30% na assinatura. O saldo é faturado por medição, conforme o avanço físico atestado nas RATs, e cada medição poderá ser parcelada em até 3 (três) vezes no cartão de crédito.</div>
+{% if total %}<p class="obs">Referência de parcelamento do saldo em 3x: R$ {{ parcela|floatformat:2 }} por parcela (ajustável conforme o valor efetivo de cada medição).</p>{% endif %}
+
+<h2>5. Obrigações das partes</h2>
+<p><strong>Da CONTRATADA:</strong> executar os serviços com diligência técnica e em conformidade com as normas aplicáveis; emitir as RATs de acompanhamento; manter sigilo das informações do condomínio; entregar o laudo de conclusão ao final do projeto.</p>
+<p><strong>Da CONTRATANTE:</strong> garantir acesso às áreas e documentos necessários; indicar responsável para acompanhamento; efetuar os pagamentos nos prazos ajustados.</p>
+
+<h2>6. Disposições gerais</h2>
+<p>Este contrato é regido pela legislação brasileira. Eventuais alterações de escopo serão formalizadas por aditivo. Fica eleito o foro da Comarca da Capital do Estado do Rio de Janeiro para dirimir quaisquer controvérsias.</p>
+
+<p style="margin-top:26px">Rio de Janeiro, {% now "d/m/Y" %}.</p>
+<div class="assinaturas">
+  <div><strong>MGT Engenharia</strong><br>Márcio Guimarães — Responsável Técnico</div>
+  <div><strong>{{ client.name }}</strong><br>Síndico(a) / Representante legal</div>
+</div>
+
+<footer class="footer"><div>MGT Engenharia — Tecnologia em Engenharia<br>📞 (21) 97516-4643 · (21) 98814-5058 · ✉️ mgtengenharia.ia@gmail.com</div><div style="text-align:right;font-weight:700">Criação ViaIA Soluções em IA<br>@by viaia 2026</div></footer>
+</main></body></html>

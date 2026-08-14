@@ -1,0 +1,22 @@
+name: Busca diária no Diário Oficial
+
+# Item 7 (Marcio 13/08): dispara todo dia a ingestão de intimações de
+# autovistoria. O endpoint só funciona com o token configurado no Render
+# (GAZETTE_CRON_TOKEN) e o mesmo valor salvo como secret deste repositório.
+
+on:
+  schedule:
+    - cron: "0 9 * * 1-5"   # 09:00 UTC = 06:00 BRT, dias úteis (Diário não circula fim de semana)
+  workflow_dispatch: {}      # permite disparo manual pela aba Actions
+
+jobs:
+  buscar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar o endpoint de busca automática
+        run: |
+          set -e
+          resposta=$(curl -sS --fail-with-body --max-time 300 \
+            -H "X-Cron-Token: ${{ secrets.GAZETTE_CRON_TOKEN }}" \
+            "${{ vars.MGT_BASE_URL || 'https://homologacao-mgt.viaiasolucoes.com' }}/diario-oficial/executar-automatico/")
+          echo "Resposta: $resposta"

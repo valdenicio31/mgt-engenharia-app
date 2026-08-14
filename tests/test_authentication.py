@@ -11,10 +11,15 @@ class AuthenticationTests(TestCase):
         self.assertEqual(authenticate(username="TESTE@example.com", password="SenhaForte!2026"), self.user)
     def test_login_by_formatted_cpf(self):
         self.assertEqual(authenticate(username="123.456.789-01", password="SenhaForte!2026"), self.user)
-    def test_first_access_creates_profile_and_logs_in(self):
+    def test_first_access_creates_inactive_user_pending_approval(self):
         response = self.client.post(reverse("first_access"), {"full_name":"Maria da Silva","email":"maria@example.com","cpf":"987.654.321-00","password1":"SenhaSegura!2026","password2":"SenhaSegura!2026"})
-        self.assertRedirects(response, reverse("dashboard"))
-        self.assertTrue(UserProfile.objects.filter(cpf="98765432100", user__email="maria@example.com").exists())
+        # RC26: cadastro público não loga mais na hora — nasce inativo e
+        # aguarda aprovação de um administrador na tela Equipe.
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "aprovação")
+        profile = UserProfile.objects.get(cpf="98765432100", user__email="maria@example.com")
+        self.assertFalse(profile.user.is_active)
+        self.assertFalse(response.wsgi_request.user.is_authenticated)
     def test_duplicate_email_is_rejected(self):
         response = self.client.post(reverse("first_access"), {"full_name":"Outra Pessoa","email":"TESTE@example.com","cpf":"98765432100","password1":"SenhaSegura!2026","password2":"SenhaSegura!2026"})
         self.assertContains(response, "Este e-mail já está cadastrado")

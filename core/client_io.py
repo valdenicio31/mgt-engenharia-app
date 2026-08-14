@@ -165,9 +165,9 @@ def import_clients(upload):
     return created, updated, errors
 
 
-def _rows():
+def _rows(queryset=None):
     yield [label for _, label in COLUMNS]
-    for client in Client.objects.all().order_by("name"):
+    for client in (queryset if queryset is not None else Client.objects.all().order_by("name")):
         values = []
         for field, _ in COLUMNS:
             value = getattr(client, field)
@@ -179,8 +179,8 @@ def _rows():
         yield values
 
 
-def export_clients(fmt):
-    rows = list(_rows())
+def export_clients(fmt, queryset=None):
+    rows = list(_rows(queryset))
     if fmt == "xlsx":
         workbook = Workbook()
         sheet = workbook.active
@@ -190,7 +190,7 @@ def export_clients(fmt):
         sheet.freeze_panes = "A2"
         for cell in sheet[1]:
             cell.font = cell.font.copy(bold=True, color="FFFFFF")
-            cell.fill = cell.fill.copy(fill_type="solid", fgColor="7427E8")
+            cell.fill = cell.fill.copy(fill_type="solid", fgColor="1F5AA8")
         output = io.BytesIO()
         workbook.save(output)
         return output.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

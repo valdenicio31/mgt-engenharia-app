@@ -8,8 +8,10 @@ class Timestamped(models.Model):
         abstract = True
 
 class UserProfile(models.Model):
+    ROLES = [("admin", "Administrador"), ("comercial", "Comercial"), ("tecnico", "Técnico")]
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")
     cpf = models.CharField("CPF", max_length=11, unique=True)
+    role = models.CharField("papel", max_length=12, choices=ROLES, default="tecnico")
     photo = models.ImageField("foto", upload_to="profiles/", blank=True)
     phone = models.CharField("telefone", max_length=30, blank=True)
     birth_date = models.DateField("data de nascimento", null=True, blank=True)
@@ -168,6 +170,8 @@ class Project(Timestamped):
     status = models.CharField("situação", max_length=20, choices=STATUS, default="planejado")
     progress = models.PositiveSmallIntegerField("progresso (%)", default=0)
     manager = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="gestor", on_delete=models.PROTECT)
+    start_date = models.DateField("início planejado", null=True, blank=True)
+    planned_end_date = models.DateField("término planejado", null=True, blank=True)
     def __str__(self): return self.name
 
 class Task(Timestamped):
@@ -179,11 +183,60 @@ class Task(Timestamped):
     def __str__(self): return self.title
 
 class RAT(Timestamped):
-    project = models.ForeignKey(Project, on_delete=models.PROTECT, related_name="rats")
-    service_date = models.DateField()
-    description = models.TextField()
-    technician = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
-    approved_by_client = models.BooleanField(default=False)
+    project = models.ForeignKey(Project, verbose_name="projeto", on_delete=models.PROTECT, related_name="rats")
+    service_date = models.DateField("data do atendimento")
+    description = models.TextField("descrição das atividades")
+    technician = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="técnico", on_delete=models.PROTECT)
+    approved_by_client = models.BooleanField("aprovada pelo cliente", default=False)
+    measurement = models.ForeignKey("core.Measurement", verbose_name="medição", null=True, blank=True, on_delete=models.SET_NULL, related_name="rats")
+
+    class Meta:
+        ordering = ("-service_date",)
+        constraints = [models.UniqueConstraint(fields=("project", "service_date"), name="uniq_rat_projeto_dia")]
+
+    def __str__(self): return f"RAT {self.service_date:%d/%m/%Y} — {self.project}"
+
+
+class Measurement(Timestamped):
+    """Medição de cobrança: consolida as RATs de um período do projeto (item 5)."""
+    STATUS = [("aberta", "Aberta"), ("enviada", "Enviada ao cliente"), ("paga", "Paga")]
+    project = models.ForeignKey(Project, verbose_name="projeto", on_delete=models.PROTECT, related_name="measurements")
+    number = models.PositiveSmallIntegerField("número da medição")
+    amount = models.DecimalField("valor da medição (R$)", max_digits=12, decimal_places=2, default=0)
+    status = models.CharField("situação", max_length=20, choices=STATUS, default="aberta")
+    notes = models.TextField("observações", blank=True)
+
+    class Meta:
+        ordering = ("project", "number")
+        constraints = [models.UniqueConstraint(fields=("project", "number"), name="uniq_medicao_projeto_numero")]
+
+    def __str__(self): return f"Medição {self.number} — {self.project}"
+
+
+class Resource(Timestamped):
+    """Recurso humano ou equipamento usado nas tarefas do projeto (item 6)."""
+    TYPES = [("humano", "Humano"), ("equipamento", "Equipamento")]
+    name = models.CharField("nome", max_length=160)
+    resource_type = models.CharField("tipo", max_length=20, choices=TYPES, default="humano")
+    detail = models.CharField("função / especificação", max_length=180, blank=True)
+    daily_cost = models.DecimalField("custo diário (R$)", max_digits=12, decimal_places=2, default=0)
+    active = models.BooleanField("ativo", default=True)
+
+    class Meta:
+        ordering = ("name",)
+
+    def __str__(self): return f"{self.name} ({self.get_resource_type_display()})"
+
+
+class TaskAllocation(Timestamped):
+    """Alocação de um recurso a uma tarefa do projeto (item 6)."""
+    task = models.ForeignKey(Task, verbose_name="tarefa", on_delete=models.CASCADE, related_name="allocations")
+    resource = models.ForeignKey(Resource, verbose_name="recurso", on_delete=models.PROTECT, related_name="allocations")
+    start_date = models.DateField("início", null=True, blank=True)
+    end_date = models.DateField("fim", null=True, blank=True)
+    notes = models.CharField("observações", max_length=200, blank=True)
+
+    def __str__(self): return f"{self.resource} → {self.task}"
 
 class AuditLog(models.Model):
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)

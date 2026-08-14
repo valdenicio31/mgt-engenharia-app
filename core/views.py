@@ -1,11 +1,10 @@
 from django.contrib import messages
-from django.contrib.auth import login
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db import connection, transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Max, Q
 import csv
 import json
 import io
@@ -13,14 +12,18 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from django.utils import timezone
 from urllib.parse import quote
+from decimal import Decimal, ROUND_HALF_UP
 from openpyxl import Workbook
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
-from .forms import AutovistoriaInfractionForm, ClientForm, FirstAccessForm, LandingLeadForm, OpportunityForm, ProjectForm, ProposalForm, TaskForm, UserProfileForm
+from django.core.exceptions import PermissionDenied
+from .forms import AutovistoriaInfractionForm, ClientForm, FirstAccessForm, LandingLeadForm, MeasurementForm, OpportunityForm, ProjectForm, ProposalForm, RATForm, ResourceForm, TaskAllocationForm, TaskForm, UserProfileForm
+from .permissions import role_required, user_role
 from .client_io import export_clients, import_clients
 from .gazette import fetch_notifications
-from .models import AuditLog, AutovistoriaInfraction, Client, GazetteFinding, LandingLead, Opportunity, Project, Proposal, RAT, Task
+from .gazette_ingest import ingest_gazette
+from .models import AuditLog, AutovistoriaInfraction, Client, GazetteFinding, LandingLead, Measurement, Opportunity, Project, Proposal, RAT, Resource, Task, TaskAllocation
 from .models import UserProfile
 
 def health(request):
@@ -101,12 +104,24 @@ def first_access(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
     form = FirstAccessForm(request.POST or None)
+    submitted = False
     if request.method == "POST" and form.is_valid():
         user = form.save()
-        login(request, user, backend="core.authentication.EmailOrCPFBackend")
-        AuditLog.objects.create(actor=user, action="primeiro_acesso", entity="User", entity_id=str(user.pk))
-        return redirect("dashboard")
-    return render(request, "registration/first_access.html", {"form": form})
+        AuditLog.objects.create(actor=user, action="primeiro_acesso_pendente", entity="User", entity_id=str(user.pk))
+        send_mail(
+            subject=f"Novo cadastro aguardando aprovação — {user.get_full_name()}",
+            message=(
+                f"Novo pedido de acesso ao sistema MGT.\n\n"
+                f"Nome: {user.get_full_name()}\nE-mail: {user.email}\n\n"
+                f"Acesse a tela Equipe para aprovar ou recusar o acesso."
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[settings.MGT_LEAD_NOTIFICATION_EMAIL],
+            fail_silently=True,
+        )
+        submitted = True
+        form = FirstAccessForm()
+    return render(request, "registration/first_access.html", {"form": form, "submitted": submitted})
 
 @login_required
 def dashboard(request):
@@ -141,6 +156,72 @@ def profile(request):
         return redirect("profile")
     return render(request, "profile.html", {"form": form, "profile": profile_obj})
 
+def _client_queryset(request):
+    """Filtros/ordenação de Clientes — compartilhado entre a tela e a exportação da visão."""
+    items = Client.objects.all()
+    search = (request.GET.get("q") or "").strip()
+    city = (request.GET.get("cidade") or "").strip()
+    neighborhood = (request.GET.get("bairro") or "").strip()
+    validation = (request.GET.get("validacao") or "").strip()
+    if search:
+        items = items.filter(Q(name__icontains=search) | Q(document__icontains=search) | Q(street__icontains=search) | Q(process_number__icontains=search) | Q(notification_number__icontains=search))
+    if city:
+        items = items.filter(city__iexact=city)
+    if neighborhood:
+        items = items.filter(neighborhood__iexact=neighborhood)
+    if validation:
+        items = items.filter(validation=validation)
+    allowed_sorts = {
+        "nome": "name", "rua": "street", "bairro": "neighborhood", "cidade": "city",
+        "processo": "process_number", "notificacao": "notification_number", "atualizado": "updated_at",
+    }
+    sort = request.GET.get("ordenar", "rua")
+    direction = request.GET.get("direcao", "asc")
+    sort_field = allowed_sorts.get(sort, "street")
+    prefix = "-" if direction == "desc" else ""
+    if sort == "rua":
+        items = items.order_by(f"{prefix}street", f"{prefix}neighborhood", f"{prefix}name")
+    elif sort == "bairro":
+        items = items.order_by(f"{prefix}neighborhood", f"{prefix}street", f"{prefix}name")
+    else:
+        items = items.order_by(f"{prefix}{sort_field}", "name")
+    filters = {
+        "q": search, "cidade": city, "bairro": neighborhood, "validacao": validation,
+        "cities": Client.objects.exclude(city="").values_list("city", flat=True).distinct().order_by("city"),
+        "neighborhoods": Client.objects.exclude(neighborhood="").values_list("neighborhood", flat=True).distinct().order_by("neighborhood"),
+    }
+    return items, filters, sort, direction
+
+
+def _opportunity_queryset(request):
+    """Filtros/ordenação de Oportunidades — mesmo padrão de Clientes."""
+    items = Opportunity.objects.select_related("client", "owner").all()
+    search = (request.GET.get("q") or "").strip()
+    stage = (request.GET.get("etapa") or "").strip()
+    owner = (request.GET.get("responsavel") or "").strip()
+    if search:
+        items = items.filter(Q(title__icontains=search) | Q(client__name__icontains=search) | Q(client__document__icontains=search) | Q(communication_number__icontains=search) | Q(source__icontains=search))
+    if stage:
+        items = items.filter(stage=stage)
+    if owner:
+        items = items.filter(owner_id=owner)
+    allowed_sorts = {
+        "titulo": "title", "cliente": "client__name", "etapa": "stage",
+        "valor": "estimated_value", "atualizado": "updated_at",
+    }
+    sort = request.GET.get("ordenar", "atualizado")
+    direction = request.GET.get("direcao", "desc" if request.GET.get("ordenar") in (None, "", "atualizado") else "asc")
+    sort_field = allowed_sorts.get(sort, "updated_at")
+    prefix = "-" if direction == "desc" else ""
+    items = items.order_by(f"{prefix}{sort_field}", "title")
+    owners_qs = get_user_model().objects.filter(opportunity__isnull=False).distinct().order_by("first_name", "username")
+    filters = {
+        "q": search, "etapa": stage, "responsavel": owner,
+        "stages": Opportunity.STAGES, "owners": owners_qs,
+    }
+    return items, filters, sort, direction
+
+
 def _crud(request, model, form_class, title, template="generic_list.html"):
     edit_id = request.GET.get("editar")
     instance = get_object_or_404(model, pk=edit_id) if edit_id else None
@@ -156,43 +237,23 @@ def _crud(request, model, form_class, title, template="generic_list.html"):
         action = "alterado" if instance else "criado"
         AuditLog.objects.create(actor=request.user, action=action, entity=model.__name__, entity_id=str(obj.pk))
         messages.success(request, "Registro atualizado com sucesso." if instance else "Registro criado com sucesso.")
+        if model is Opportunity and obj.stage == "ganha":
+            client = obj.client
+            if client.validation != "confirmado" or not client.active:
+                client.validation = "confirmado"
+                client.active = True
+                client.save(update_fields=("validation", "active", "updated_at"))
+                AuditLog.objects.create(actor=request.user, action="oportunidade_ganha", entity="Client", entity_id=str(client.pk), details={"oportunidade": obj.pk})
+            messages.success(request, f"🎉 Oportunidade ganha! O condomínio {client.name} foi confirmado como cliente — gere o contrato padrão na tela de Clientes (ação 📄 Contrato).")
         return redirect(request.path)
-    resource = {Client: "clientes", Opportunity: "oportunidades", Proposal: "propostas", Project: "projetos", Task: "tarefas"}[model]
+    resource = {Client: "clientes", Opportunity: "oportunidades", Proposal: "propostas", Project: "projetos", Task: "tarefas", Resource: "recursos", TaskAllocation: "alocacoes"}[model]
     items = model.objects.all().order_by("-updated_at")
     filters = {}
     sort = direction = ""
     if model is Client:
-        search = (request.GET.get("q") or "").strip()
-        city = (request.GET.get("cidade") or "").strip()
-        neighborhood = (request.GET.get("bairro") or "").strip()
-        validation = (request.GET.get("validacao") or "").strip()
-        if search:
-            items = items.filter(Q(name__icontains=search) | Q(document__icontains=search) | Q(street__icontains=search) | Q(process_number__icontains=search) | Q(notification_number__icontains=search))
-        if city:
-            items = items.filter(city__iexact=city)
-        if neighborhood:
-            items = items.filter(neighborhood__iexact=neighborhood)
-        if validation:
-            items = items.filter(validation=validation)
-        allowed_sorts = {
-            "nome": "name", "rua": "street", "bairro": "neighborhood", "cidade": "city",
-            "processo": "process_number", "notificacao": "notification_number", "atualizado": "updated_at",
-        }
-        sort = request.GET.get("ordenar", "rua")
-        direction = request.GET.get("direcao", "asc")
-        sort_field = allowed_sorts.get(sort, "street")
-        prefix = "-" if direction == "desc" else ""
-        if sort == "rua":
-            items = items.order_by(f"{prefix}street", f"{prefix}neighborhood", f"{prefix}name")
-        elif sort == "bairro":
-            items = items.order_by(f"{prefix}neighborhood", f"{prefix}street", f"{prefix}name")
-        else:
-            items = items.order_by(f"{prefix}{sort_field}", "name")
-        filters = {
-            "q": search, "cidade": city, "bairro": neighborhood, "validacao": validation,
-            "cities": Client.objects.exclude(city="").values_list("city", flat=True).distinct().order_by("city"),
-            "neighborhoods": Client.objects.exclude(neighborhood="").values_list("neighborhood", flat=True).distinct().order_by("neighborhood"),
-        }
+        items, filters, sort, direction = _client_queryset(request)
+    elif model is Opportunity:
+        items, filters, sort, direction = _opportunity_queryset(request)
     show_form = bool(instance or request.GET.get("novo") or (request.method == "POST" and form.errors))
     return render(request, template, {"title": title, "items": items[:100], "form": form, "editing": instance, "show_form": show_form, "resource": resource, "filters": filters, "sort": sort, "direction": direction})
 
@@ -444,9 +505,9 @@ def clients_to_opportunities(request):
     )
     return redirect("clients")
 
-CRUD_MODELS = {"clientes": Client, "oportunidades": Opportunity, "propostas": Proposal, "projetos": Project, "tarefas": Task}
+CRUD_MODELS = {"clientes": Client, "oportunidades": Opportunity, "propostas": Proposal, "projetos": Project, "tarefas": Task, "recursos": Resource, "alocacoes": TaskAllocation, "rats": RAT, "medicoes": Measurement}
 
-@login_required
+@role_required("admin")
 @require_POST
 def record_delete(request, resource, pk):
     model = CRUD_MODELS.get(resource)
@@ -462,11 +523,11 @@ def record_delete(request, resource, pk):
         messages.error(request, "Este registro está relacionado a outros dados e não pode ser excluído.")
     return redirect(f"/{resource}/")
 
-def _generic_export(model, fmt):
+def _generic_export(model, fmt, queryset=None):
     fields = [f for f in model._meta.fields if f.name not in {"id", "created_at", "updated_at"}]
     headers = [str(f.verbose_name).title() for f in fields]
     rows = []
-    for obj in model.objects.all():
+    for obj in (queryset if queryset is not None else model.objects.all()):
         values = []
         for field in fields:
             display = getattr(obj, f"get_{field.name}_display", None)
@@ -490,16 +551,23 @@ def _generic_export(model, fmt):
         return ET.tostring(root, encoding="utf-8", xml_declaration=True), "application/xml"
     raise ValueError("Formato inválido")
 
-@login_required
+@role_required("admin", "comercial")
 def records_export(request, resource, fmt):
     model = CRUD_MODELS.get(resource)
     if not model or fmt not in {"xlsx", "csv", "txt", "xml"}: return HttpResponse("Exportação inválida.", status=400)
-    content, content_type = _generic_export(model, fmt)
+    queryset = None
+    if request.GET.get("escopo") == "visao":
+        if model is Opportunity:
+            queryset, _, _, _ = _opportunity_queryset(request)
+        elif model is Client:
+            queryset, _, _, _ = _client_queryset(request)
+    content, content_type = _generic_export(model, fmt, queryset)
+    scope_suffix = "_visao" if queryset is not None else ""
     response = HttpResponse(content, content_type=content_type)
-    response["Content-Disposition"] = f'attachment; filename="MGT_{resource}.{fmt}"'
+    response["Content-Disposition"] = f'attachment; filename="MGT_{resource}{scope_suffix}.{fmt}"'
     return response
 
-@login_required
+@role_required("admin", "comercial")
 def clients_import(request):
     if request.method != "POST" or "file" not in request.FILES:
         messages.error(request, "Selecione um arquivo para importar.")
@@ -518,13 +586,16 @@ def clients_import(request):
         messages.error(request, f"Não foi possível importar: {exc}")
     return redirect("clients")
 
-@login_required
+@role_required("admin", "comercial")
 def clients_export(request, fmt):
+    queryset = None
+    if request.GET.get("escopo") == "visao":
+        queryset, _, _, _ = _client_queryset(request)
     try:
-        content, content_type = export_clients(fmt.lower())
+        content, content_type = export_clients(fmt.lower(), queryset)
     except ValueError as exc:
         return HttpResponse(str(exc), status=400)
-    filename = f"MGT_Engenharia_Condominios.{fmt.lower()}"
+    filename = f"MGT_Engenharia_Condominios{'_visao' if queryset is not None else ''}.{fmt.lower()}"
     response = HttpResponse(content, content_type=content_type)
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
@@ -542,8 +613,52 @@ def opportunity_letter(request, pk):
         "opportunity_letter.html",
         {"opportunity": opportunity, "infractions": opportunity.infractions.all()},
     )
+
+
 @login_required
-def projects(request): return _crud(request, Project, ProjectForm, "Projetos")
+def client_contract(request, pk):
+    """Contrato padrão de prestação de serviço (item 4 — Marcio 13/08):
+    discriminação do serviço, prazo com cronograma de execução e pagamento
+    30% de sinal + saldo por medição, parcelável em até 3x no cartão."""
+    client = get_object_or_404(Client, pk=pk)
+    opportunity = None
+    opp_id = request.GET.get("oportunidade")
+    if opp_id:
+        opportunity = client.opportunities.filter(pk=opp_id).first()
+    if opportunity is None:
+        opportunity = (client.opportunities.filter(stage="ganha").order_by("-updated_at").first()
+                       or client.opportunities.order_by("-updated_at").first())
+    infractions = opportunity.infractions.all() if opportunity else AutovistoriaInfraction.objects.filter(client=client)
+    total = (opportunity.estimated_value if opportunity else None) or Decimal("0")
+    centavos = Decimal("0.01")
+    sinal = (total * Decimal("0.30")).quantize(centavos, rounding=ROUND_HALF_UP)
+    saldo = total - sinal
+    parcela = (saldo / 3).quantize(centavos, rounding=ROUND_HALF_UP) if saldo else Decimal("0")
+    try:
+        weeks = max(2, min(52, int(request.GET.get("semanas") or 8)))
+    except ValueError:
+        weeks = 8
+    fim_vistoria = max(2, round(weeks * 0.4))
+    fim_laudo = max(fim_vistoria + 1, round(weeks * 0.7))
+    cronograma = [
+        ("1. Planejamento e mobilização", "Reunião inicial, levantamento documental e plano de vistoria", "Semana 1"),
+        ("2. Vistoria técnica em campo", "Inspeção das áreas comuns, fachadas e sistemas do condomínio", f"Semanas 2 a {fim_vistoria}"),
+        ("3. Análise e laudo técnico", "Consolidação das evidências, classificação e emissão do laudo", f"Semanas {fim_vistoria + 1} a {fim_laudo}"),
+        ("4. Plano de ação e encerramento", "Orientação das providências, medição final e entrega", f"Semanas {fim_laudo + 1} a {weeks}"),
+    ]
+    medicoes = [
+        ("Sinal (assinatura do contrato)", "30% do valor", sinal),
+        ("Medição 1 — conclusão da vistoria em campo", "sobre o saldo, conforme avanço", None),
+        ("Medição 2 — entrega do laudo técnico", "sobre o saldo, conforme avanço", None),
+        ("Medição final — plano de ação e encerramento", "sobre o saldo, conforme avanço", None),
+    ]
+    return render(request, "client_contract.html", {
+        "client": client, "opportunity": opportunity, "infractions": infractions,
+        "total": total, "sinal": sinal, "saldo": saldo, "parcela": parcela,
+        "weeks": weeks, "cronograma": cronograma, "medicoes": medicoes,
+    })
+@login_required
+def projects(request): return _crud(request, Project, ProjectForm, "Projetos", "projects.html")
 @login_required
 def tasks(request): return _crud(request, Task, TaskForm, "Tarefas")
 
@@ -551,8 +666,82 @@ def tasks(request): return _crud(request, Task, TaskForm, "Tarefas")
 def proposals(request): return _crud(request, Proposal, ProposalForm, "Propostas")
 
 @login_required
+def resources(request): return _crud(request, Resource, ResourceForm, "Recursos (equipe e equipamentos)")
+
+@login_required
+def allocations(request): return _crud(request, TaskAllocation, TaskAllocationForm, "Alocações de recursos")
+
+@login_required
 def rats(request):
-    return render(request, "simple_list.html", {"title": "RAT — Relatórios de Atendimento", "items": RAT.objects.select_related("project")[:50]})
+    """RAT diária (item 5): uma RAT por dia por projeto em execução."""
+    edit_id = request.GET.get("editar")
+    instance = get_object_or_404(RAT, pk=edit_id) if edit_id else None
+    initial = {}
+    if not instance:
+        initial["service_date"] = timezone.localdate()
+        if request.GET.get("projeto"):
+            initial["project"] = request.GET.get("projeto")
+    form = RATForm(request.POST or None, instance=instance, initial=initial)
+    if request.method == "POST" and form.is_valid():
+        rat = form.save(commit=False)
+        if not rat.technician_id:
+            rat.technician = request.user
+        rat.save()
+        action = "alterado" if instance else "criado"
+        AuditLog.objects.create(actor=request.user, action=action, entity="RAT", entity_id=str(rat.pk))
+        messages.success(request, "RAT registrada com sucesso.")
+        return redirect("rats")
+    today = timezone.localdate()
+    running = Project.objects.filter(status="em_execucao").select_related("client")
+    missing_today = running.exclude(rats__service_date=today)
+    items = RAT.objects.select_related("project", "technician", "measurement")[:100]
+    show_form = bool(instance or request.GET.get("novo") or request.GET.get("projeto") or (request.method == "POST" and form.errors))
+    return render(request, "rats.html", {
+        "title": "RAT — Relatórios de Atendimento", "items": items, "form": form,
+        "editing": instance, "show_form": show_form, "missing_today": missing_today, "today": today,
+    })
+
+
+@login_required
+def measurements(request):
+    """Medição de cobrança (item 5): consolida as RATs abertas do projeto."""
+    form = MeasurementForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        medicao = form.save(commit=False)
+        ultimo = medicao.project.measurements.aggregate(m=Max("number"))["m"] or 0
+        medicao.number = ultimo + 1
+        medicao.save()
+        anexadas = RAT.objects.filter(project=medicao.project, measurement__isnull=True).update(measurement=medicao)
+        AuditLog.objects.create(actor=request.user, action="medicao_criada", entity="Measurement", entity_id=str(medicao.pk), details={"rats_consolidadas": anexadas})
+        messages.success(request, f"Medição {medicao.number} criada consolidando {anexadas} RAT(s) do projeto {medicao.project}.")
+        return redirect("measurements")
+    items = Measurement.objects.select_related("project__client").prefetch_related("rats").order_by("-created_at")[:100]
+    return render(request, "measurements.html", {"title": "Medições de cobrança", "items": items, "form": form})
+
+
+@login_required
+def project_report(request, pk):
+    """Laudo de conclusão + dashboards planejado × executado (item 5)."""
+    project = get_object_or_404(Project.objects.select_related("client", "manager"), pk=pk)
+    tasks_qs = project.tasks.select_related("assignee").order_by("due_date")
+    tasks_done = [t for t in tasks_qs if t.completed]
+    rats_qs = project.rats.select_related("technician").order_by("service_date")
+    first_rat, last_rat = rats_qs.first(), rats_qs.last()
+    medicoes = project.measurements.prefetch_related("rats").order_by("number")
+    total_medido = sum((m.amount for m in medicoes), Decimal("0"))
+    planned_days = None
+    if project.start_date and project.planned_end_date and project.planned_end_date >= project.start_date:
+        planned_days = (project.planned_end_date - project.start_date).days + 1
+    executed_days = (last_rat.service_date - first_rat.service_date).days + 1 if first_rat else 0
+    barra_max = max(planned_days or 0, executed_days, 1)
+    return render(request, "project_report.html", {
+        "project": project, "tasks": tasks_qs, "tasks_done": len(tasks_done),
+        "rats": rats_qs, "first_rat": first_rat, "last_rat": last_rat,
+        "medicoes": medicoes, "total_medido": total_medido,
+        "planned_days": planned_days, "executed_days": executed_days,
+        "delay_days": (executed_days - planned_days) if planned_days else 0,
+        "planned_pct": int((planned_days or 0) * 100 / barra_max), "executed_pct": int(executed_days * 100 / barra_max),
+    })
 
 
 def _parse_gazette_address(value):
@@ -571,6 +760,10 @@ def _parse_gazette_address(value):
 @login_required
 def gazette_findings(request):
     if request.method == "POST":
+        # Executar a busca no Diário cria clientes e oportunidades — restrito
+        # a admin/comercial; técnico continua podendo consultar a lista.
+        if user_role(request.user) not in ("admin", "comercial"):
+            raise PermissionDenied
         try:
             start_raw, end_raw = request.POST.get("start_date"), request.POST.get("end_date")
             end_date = datetime.strptime(end_raw, "%Y-%m-%d").date() if end_raw else None
@@ -578,81 +771,9 @@ def gazette_findings(request):
             if start_date and end_date and (end_date < start_date or (end_date - start_date).days > 31):
                 raise ValueError("Escolha um período válido de até 31 dias.")
             dates = [None] if not start_date else [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
-            all_findings = []
-            for selected_date in dates:
-                try:
-                    _, day_findings = fetch_notifications(selected_date)
-                    all_findings.extend(day_findings)
-                except Exception:
-                    continue
-            created_findings = created_clients = updated_clients = created_opportunities = duplicates = 0
-            for item in all_findings:
-                with transaction.atomic():
-                    finding, was_created = GazetteFinding.objects.get_or_create(
-                        edition_id=item["edition_id"], notification_number=item["notification_number"], defaults=item
-                    )
-                    created_findings += int(was_created)
-                    client = Client.objects.filter(
-                        process_number__iexact=finding.process_number,
-                        notification_number__iexact=finding.notification_number,
-                    ).first()
-                    if not client:
-                        client = Client.objects.filter(name__iexact=finding.condominium_name).first()
-                    if client:
-                        duplicates += 1
-                        changed = False
-                        for field, value in {
-                            "process_number": finding.process_number,
-                            "publication_date": finding.publication_date,
-                            "notification_number": finding.notification_number,
-                            "action_description": f"Intimação localizada automaticamente no Diário Oficial. Página {finding.page}. Fonte: {finding.source_url}",
-                            "classification": "autovistoria",
-                        }.items():
-                            if value and not getattr(client, field):
-                                setattr(client, field, value); changed = True
-                        if changed:
-                            client.save(); updated_clients += 1
-                    else:
-                        street, number, neighborhood = _parse_gazette_address(finding.address)
-                        client = Client.objects.create(
-                            name=finding.condominium_name,
-                            origin="diario_oficial",
-                            process_number=finding.process_number,
-                            publication_date=finding.publication_date,
-                            notification_number=finding.notification_number,
-                            street=street,
-                            address_number=number,
-                            neighborhood=neighborhood,
-                            classification="autovistoria",
-                            action_description=f"Intimação localizada automaticamente no Diário Oficial. Página {finding.page}. Fonte: {finding.source_url}",
-                            validation="validar",
-                            active=True,
-                        )
-                        created_clients += 1
-                    finding.client = client
-                    owner = request.user
-                    opportunity, opp_created = Opportunity.objects.get_or_create(
-                        client=client,
-                        communication_number=finding.notification_number,
-                        source="Diário Oficial",
-                        defaults={
-                            "title": f"Autovistoria — {client.name}",
-                            "stage": "lead",
-                            "estimated_value": 0,
-                            "owner": owner,
-                            "consultation_status": "Nova intimação — contato comercial pendente",
-                            "consultation_notes": f"Processo {finding.process_number}; publicação de {finding.publication_date:%d/%m/%Y}; página {finding.page}.",
-                            "consultation_address": finding.address,
-                            "source_url": finding.source_url,
-                            "consulted_at": timezone.now(),
-                        },
-                    )
-                    created_opportunities += int(opp_created)
-                    finding.status = "convertido"
-                    finding.save(update_fields=("client", "status", "updated_at"))
+            stats = ingest_gazette(dates, owner=request.user, actor=request.user)
             period = f"{start_date:%d/%m/%Y} a {end_date:%d/%m/%Y}" if start_date else "edição mais recente"
-            AuditLog.objects.create(actor=request.user, action="pesquisa_diario_oficial", entity="GazetteFinding", entity_id=period, details={"localizados": len(all_findings), "publicacoes_novas": created_findings, "clientes_criados": created_clients, "clientes_atualizados": updated_clients, "oportunidades_criadas": created_opportunities, "duplicidades": duplicates})
-            messages.success(request, f"Período {period}: {len(all_findings)} notificações, {created_clients} clientes criados e {created_opportunities} oportunidades geradas.")
+            messages.success(request, f"Período {period}: {stats['localizados']} notificações, {stats['clientes_criados']} clientes criados e {stats['oportunidades_criadas']} oportunidades geradas.")
         except ValueError as exc:
             messages.error(request, str(exc))
         except Exception:
@@ -661,6 +782,57 @@ def gazette_findings(request):
     return render(request, "gazette_findings.html", {"items": GazetteFinding.objects.select_related("client").all()[:200]})
 
 
+def gazette_auto_run(request):
+    """Disparo externo da busca diária (item 7). Protegido por token:
+    GET/POST /diario-oficial/executar-automatico/?token=<GAZETTE_CRON_TOKEN>.
+    Sem o token configurado no ambiente, o endpoint fica desativado."""
+    expected = getattr(settings, "GAZETTE_CRON_TOKEN", "")
+    provided = request.GET.get("token") or request.headers.get("X-Cron-Token", "")
+    if not expected or provided != expected:
+        return JsonResponse({"erro": "não autorizado"}, status=403)
+    try:
+        stats = ingest_gazette([None], origem="busca_diaria_automatica")
+    except Exception as exc:
+        return JsonResponse({"erro": str(exc)}, status=500)
+    return JsonResponse({"ok": True, **stats})
+
+
+
+@role_required("admin")
+def team(request):
+    """Equipe: aprovação de novos usuários, papéis e ativação (RC26)."""
+    User = get_user_model()
+    if request.method == "POST":
+        action = request.POST.get("acao")
+        target = get_object_or_404(User, pk=request.POST.get("usuario"))
+        if target.is_superuser and target != request.user:
+            messages.error(request, "Superusuários só podem ser alterados no /admin.")
+            return redirect("team")
+        if action == "aprovar":
+            target.is_active = True
+            target.save(update_fields=("is_active",))
+            role = request.POST.get("papel")
+            if role in dict(UserProfile.ROLES):
+                UserProfile.objects.filter(user=target).update(role=role)
+            AuditLog.objects.create(actor=request.user, action="usuario_aprovado", entity="User", entity_id=str(target.pk), details={"papel": role or ""})
+            messages.success(request, f"Acesso de {target.get_full_name() or target.email} aprovado.")
+        elif action == "papel":
+            role = request.POST.get("papel")
+            if role in dict(UserProfile.ROLES):
+                UserProfile.objects.filter(user=target).update(role=role)
+                AuditLog.objects.create(actor=request.user, action="papel_alterado", entity="User", entity_id=str(target.pk), details={"papel": role})
+                messages.success(request, f"Papel de {target.get_full_name() or target.email} atualizado.")
+        elif action == "desativar":
+            if target == request.user:
+                messages.error(request, "Você não pode desativar o próprio acesso.")
+            else:
+                target.is_active = False
+                target.save(update_fields=("is_active",))
+                AuditLog.objects.create(actor=request.user, action="usuario_desativado", entity="User", entity_id=str(target.pk))
+                messages.success(request, f"Acesso de {target.get_full_name() or target.email} desativado.")
+        return redirect("team")
+    users = User.objects.select_related("profile").order_by("is_active", "-date_joined")
+    return render(request, "team.html", {"users": users, "roles": UserProfile.ROLES})
 
 @login_required
 def help_center(request):

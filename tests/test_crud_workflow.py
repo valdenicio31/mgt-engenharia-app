@@ -2,12 +2,14 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from core.models import Client, Opportunity, Project, Task
+from core.models import Client, Opportunity, Project, Task, UserProfile
 
 
 class CrudWorkflowTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="teste", password="SenhaForte123")
+        # RC26: excluir/exportar/Diário exigem papel — o fluxo completo é de admin
+        UserProfile.objects.create(user=self.user, cpf="99999999999", role="admin")
         self.client.force_login(self.user)
         self.condominium = Client.objects.create(name="Condomínio Teste", email="teste@example.com", phone="21999990000")
 

@@ -4,7 +4,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.db import transaction
-from .models import AutovistoriaInfraction, Client, LandingLead, Opportunity, Project, Proposal, Task, UserProfile
+from .models import AutovistoriaInfraction, Client, LandingLead, Measurement, Opportunity, Project, Proposal, RAT, Resource, Task, TaskAllocation, UserProfile
 
 class EmailCPFAuthenticationForm(AuthenticationForm):
     username = forms.CharField(label="E-mail ou CPF", widget=forms.TextInput(attrs={"autofocus": True, "autocomplete": "username"}))
@@ -37,6 +37,9 @@ class FirstAccessForm(UserCreationForm):
         user.last_name = names[1] if len(names) > 1 else ""
         user.email = self.cleaned_data["email"]
         user.username = f"user_{uuid.uuid4().hex[:20]}"
+        # Cadastro público nasce INATIVO — só entra após aprovação de um
+        # administrador na tela Equipe (bloqueador de produção RC26).
+        user.is_active = False
         if commit:
             user.save()
             UserProfile.objects.create(user=user, cpf=self.cleaned_data["cpf"])
@@ -176,10 +179,43 @@ class ProposalForm(forms.ModelForm):
 class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
-        fields = ("client", "name", "status", "progress")
+        fields = ("client", "name", "status", "progress", "start_date", "planned_end_date")
+        widgets = {
+            "start_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "planned_end_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+        }
 
 class TaskForm(forms.ModelForm):
     class Meta:
         model = Task
         fields = ("project", "title", "due_date", "completed")
         widgets = {"due_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")}
+
+class RATForm(forms.ModelForm):
+    class Meta:
+        model = RAT
+        fields = ("project", "service_date", "description", "approved_by_client")
+        widgets = {
+            "service_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "description": forms.Textarea(attrs={"rows": 4, "placeholder": "Atividades realizadas no dia, equipe envolvida e ocorrências."}),
+        }
+
+class MeasurementForm(forms.ModelForm):
+    class Meta:
+        model = Measurement
+        fields = ("project", "amount", "status", "notes")
+        widgets = {"notes": forms.Textarea(attrs={"rows": 3, "placeholder": "Período coberto, condições de faturamento etc."})}
+
+class ResourceForm(forms.ModelForm):
+    class Meta:
+        model = Resource
+        fields = ("name", "resource_type", "detail", "daily_cost", "active")
+
+class TaskAllocationForm(forms.ModelForm):
+    class Meta:
+        model = TaskAllocation
+        fields = ("task", "resource", "start_date", "end_date", "notes")
+        widgets = {
+            "start_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "end_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+        }

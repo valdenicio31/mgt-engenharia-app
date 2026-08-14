@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block heading %}Equipe e acessos{% endblock %}
+{% block content %}
+<section class="grid">
+  <article class="panel">
+    <div class="records-heading"><div><h2>👥 Usuários do sistema</h2><small>Aprove novos cadastros, defina o papel de cada pessoa e desative acessos. Usuários pendentes aparecem primeiro.</small></div></div>
+    <table><thead><tr><th>Nome</th><th>E-mail</th><th>CPF</th><th>Papel</th><th>Situação</th><th>Ações</th></tr></thead><tbody>
+    {% for u in users %}<tr>
+      <td><strong>{{ u.get_full_name|default:u.get_username }}</strong>{% if u.is_superuser %} <span class="tag">superusuário</span>{% endif %}</td>
+      <td>{{ u.email|default:'—' }}</td>
+      <td>{{ u.profile.cpf|default:'—' }}</td>
+      <td>{% if u.is_superuser %}Administrador{% else %}{{ u.profile.get_role_display|default:'—' }}{% endif %}</td>
+      <td>{% if u.is_active %}<span class="status status-confirmado">Ativo</span>{% else %}<span class="status status-validar">Aguardando aprovação</span>{% endif %}</td>
+      <td class="row-actions">
+        {% if not u.is_active %}
+        <form method="post" class="inline-form">{% csrf_token %}<input type="hidden" name="usuario" value="{{ u.pk }}"><input type="hidden" name="acao" value="aprovar">
+          <select name="papel">{% for value, label in roles %}<option value="{{ value }}" {% if u.profile.role == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+          <button class="action-link" type="submit">✅ Aprovar</button>
+        </form>
+        {% else %}{% if not u.is_superuser %}
+        <form method="post" class="inline-form">{% csrf_token %}<input type="hidden" name="usuario" value="{{ u.pk }}"><input type="hidden" name="acao" value="papel">
+          <select name="papel" onchange="this.form.submit()">{% for value, label in roles %}<option value="{{ value }}" {% if u.profile.role == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+        </form>
+        <form method="post" class="inline-form" onsubmit="return confirm('Desativar o acesso deste usuário?')">{% csrf_token %}<input type="hidden" name="usuario" value="{{ u.pk }}"><input type="hidden" name="acao" value="desativar"><button class="danger-link" type="submit">🚫 Desativar</button></form>
+        {% endif %}{% endif %}
+      </td>
+    </tr>{% empty %}<tr><td colspan="6">Nenhum usuário.</td></tr>{% endfor %}
+    </tbody></table>
+  </article>
+</section>
+{% endblock %}

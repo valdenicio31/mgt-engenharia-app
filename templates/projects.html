@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block heading %}{{ title }}{% endblock %}
+{% block content %}
+<section class="grid">
+  <article class="panel">
+    <div class="records-heading">
+      <div><h2>🏗️ Projetos</h2><small>Projetos em execução geram RAT diária; as RATs viram medições de cobrança e, no fim, o laudo de conclusão.</small></div>
+      {% if user_role != 'tecnico' %}<details class="export-menu"><summary>📤 Exportar</summary><div><a href="{% url 'records_export' 'projetos' 'xlsx' %}">Excel (.xlsx)</a><a href="{% url 'records_export' 'projetos' 'csv' %}">CSV (.csv)</a><a href="{% url 'records_export' 'projetos' 'txt' %}">Texto (.txt)</a><a href="{% url 'records_export' 'projetos' 'xml' %}">XML (.xml)</a></div></details>{% endif %}
+    </div>
+    <div class="table-scroll"><table><thead><tr><th>Projeto</th><th>Cliente</th><th>Situação</th><th>Progresso</th><th>Período planejado</th><th>Ações</th></tr></thead><tbody>
+    {% for item in items %}<tr>
+      <td><strong>{{ item.name }}</strong></td>
+      <td>{{ item.client.name }}</td>
+      <td><span class="status status-{{ item.status }}">{{ item.get_status_display }}</span></td>
+      <td>{{ item.progress }}%</td>
+      <td>{% if item.start_date %}{{ item.start_date|date:'d/m/Y' }} → {{ item.planned_end_date|date:'d/m/Y'|default:'—' }}{% else %}—{% endif %}</td>
+      <td class="row-actions">
+        <a class="action-link" href="{% url 'rats' %}?projeto={{ item.pk }}">📝 RAT de hoje</a>
+        <a class="action-link" target="_blank" href="{% url 'project_report' item.pk %}">📑 Laudo</a>
+        <a class="action-link" href="?editar={{ item.pk }}">✏️ Alterar</a>
+        {% if user_role == 'admin' %}<form method="post" action="{% url 'record_delete' 'projetos' item.pk %}" onsubmit="return confirm('Confirma a exclusão deste projeto?')">{% csrf_token %}<button class="danger-link" type="submit">🗑️ Excluir</button></form>{% endif %}
+      </td>
+    </tr>{% empty %}<tr><td colspan="6">Nenhum projeto cadastrado.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </article>
+  <article class="panel"><h2>{% if editing %}Alterar projeto{% else %}Novo projeto{% endif %}</h2>
+    <form method="post" class="form">{% csrf_token %}{% if form.non_field_errors %}<div class="error">{{ form.non_field_errors }}</div>{% endif %}{{ form.as_p }}<button type="submit">{% if editing %}💾 Salvar alterações{% else %}💾 Salvar projeto{% endif %}</button>{% if editing %}<a class="secondary-button" href="{% url 'projects' %}">✖ Cancelar</a>{% endif %}</form>
+  </article>
+</section>
+{% endblock %}

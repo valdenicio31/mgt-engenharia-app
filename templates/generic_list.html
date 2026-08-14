@@ -3,16 +3,16 @@
 {% block content %}
 <section class="grid">
   <article class="panel">
-    <div class="records-heading"><h2>Registros</h2><details class="export-menu"><summary>Exportar</summary><div>
+    <div class="records-heading"><h2>Registros</h2>{% if user_role != 'tecnico' %}<details class="export-menu"><summary>Exportar</summary><div>
       <a href="{% url 'records_export' resource 'xlsx' %}">Excel</a>
       <a href="{% url 'records_export' resource 'csv' %}">CSV</a>
       <a href="{% url 'records_export' resource 'xml' %}">XML</a>
       <a href="{% url 'records_export' resource 'txt' %}">Texto</a>
-    </div></details></div>
+    </div></details>{% endif %}</div>
     <table><thead><tr><th>Nome / identificação</th><th>Atualizado</th><th>Ações</th></tr></thead><tbody>
     {% for item in items %}<tr><td>{{ item }}</td><td>{{ item.updated_at|date:'d/m/Y H:i' }}</td><td class="row-actions">
       <a class="action-link" href="?editar={{ item.pk }}">Alterar</a>
-      <form method="post" action="{% url 'record_delete' resource item.pk %}" onsubmit="return confirm('Confirma a exclusão deste registro?')">{% csrf_token %}<button class="danger-link" type="submit">Excluir</button></form>
+      {% if user_role == 'admin' %}<form method="post" action="{% url 'record_delete' resource item.pk %}" onsubmit="return confirm('Confirma a exclusão deste registro?')">{% csrf_token %}<button class="danger-link" type="submit">Excluir</button></form>{% endif %}
     </td></tr>{% empty %}<tr><td colspan="3">Nenhum registro.</td></tr>{% endfor %}
     </tbody></table>
   </article>
