@@ -1,6 +1,13 @@
 {% extends 'base.html' %}{% block heading %}Painel operacional{% endblock %}{% block content %}
 <section class="panel dashboard-filter"><form method="get"><label>🔎 Filtrar condomínios por rua, bairro ou cidade<input name="local" value="{{ location_filter }}" placeholder="Digite uma localização"></label><button type="submit">🔍 Aplicar filtro</button>{% if location_filter %}<a class="secondary-button" href="{% url 'dashboard' %}">✖ Limpar</a>{% endif %}</form></section>
 <section class="cards"><article><span>🏢 Clientes ativos</span><b>{{ clients }}</b></article><article><span>🎯 Oportunidades abertas</span><b>{{ opportunities }}</b></article><article><span>🏗️ Projetos em execução</span><b>{{ projects }}</b></article><article><span>✅ Tarefas pendentes</span><b>{{ pending_tasks }}</b></article></section>
+<section class="panel"><h2>⚡ Pendências de hoje</h2><table><tbody>
+{% if pendencias.aprovacoes %}<tr><td>👥 <strong>{{ pendencias.aprovacoes }}</strong> cadastro(s) aguardando a sua aprovação</td><td><a class="action-link" href="{% url 'team' %}">Abrir Equipe →</a></td></tr>{% endif %}
+{% if pendencias.projetos_sem_rat %}<tr><td>📝 <strong>{{ pendencias.projetos_sem_rat }}</strong> projeto(s) em execução ainda sem RAT hoje</td><td><a class="action-link" href="{% url 'rats' %}">Registrar RAT →</a></td></tr>{% endif %}
+{% if pendencias.oportunidades_lead %}<tr><td>🎯 <strong>{{ pendencias.oportunidades_lead }}</strong> oportunidade(s) na etapa Lead aguardando qualificação</td><td><a class="action-link" href="{% url 'opportunities' %}?etapa=lead">Qualificar →</a></td></tr>{% endif %}
+{% if pendencias.leads_7d %}<tr><td>📨 <strong>{{ pendencias.leads_7d }}</strong> lead(s) chegaram pela landing nos últimos 7 dias</td><td><a class="action-link" href="{% url 'opportunities' %}">Ver funil →</a></td></tr>{% endif %}
+{% if not pendencias.aprovacoes and not pendencias.projetos_sem_rat and not pendencias.oportunidades_lead and not pendencias.leads_7d %}<tr><td>✅ Nenhuma pendência — tudo em dia!</td><td></td></tr>{% endif %}
+</tbody></table></section>
 <section class="location-grid">
 <article class="panel"><h2>🛣️ Condomínios por rua</h2><table><tbody>{% for item in by_street %}<tr><td>{{ item.street }}</td><td><b>{{ item.total }}</b></td></tr>{% empty %}<tr><td>Nenhuma rua informada.</td></tr>{% endfor %}</tbody></table></article>
 <article class="panel"><h2>📍 Condomínios por bairro</h2><table><tbody>{% for item in by_neighborhood %}<tr><td>{{ item.neighborhood }}</td><td><b>{{ item.total }}</b></td></tr>{% empty %}<tr><td>Nenhum bairro informado.</td></tr>{% endfor %}</tbody></table></article>

@@ -17,6 +17,8 @@ services:
         value: "False"
       - key: DATABASE_URL
         sync: false
+      - key: GAZETTE_CRON_TOKEN
+        sync: false
       - key: ALLOWED_HOSTS
         value: .onrender.com,homologacao-mgt.viaiasolucoes.com
       - key: CSRF_TRUSTED_ORIGINS

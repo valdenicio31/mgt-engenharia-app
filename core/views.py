@@ -131,7 +131,18 @@ def dashboard(request):
         clients_qs = clients_qs.filter(
             Q(street__icontains=location) | Q(neighborhood__icontains=location) | Q(city__icontains=location)
         )
+    # Pendências do dia (item 9 — atalhos do uso diário)
+    today = timezone.localdate()
+    hoje_7d = timezone.now() - timedelta(days=7)
+    pendencias = {
+        "projetos_sem_rat": Project.objects.filter(status="em_execucao").exclude(rats__service_date=today).count(),
+        "leads_7d": LandingLead.objects.filter(created_at__gte=hoje_7d).count(),
+        "oportunidades_lead": Opportunity.objects.filter(stage="lead").count(),
+    }
+    if user_role(request.user) == "admin":
+        pendencias["aprovacoes"] = get_user_model().objects.filter(is_active=False, profile__isnull=False).count()
     context = {
+        "pendencias": pendencias,
         "clients": clients_qs.count(),
         "opportunities": Opportunity.objects.exclude(stage__in=["ganha", "perdida"]).count(),
         "projects": Project.objects.filter(status="em_execucao").count(),

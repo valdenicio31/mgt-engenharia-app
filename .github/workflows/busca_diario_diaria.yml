@@ -18,5 +18,5 @@ jobs:
           set -e
           resposta=$(curl -sS --fail-with-body --max-time 300 \
             -H "X-Cron-Token: ${{ secrets.GAZETTE_CRON_TOKEN }}" \
-            "${{ vars.MGT_BASE_URL || 'https://homologacao-mgt.viaiasolucoes.com' }}/diario-oficial/executar-automatico/")
+            "${{ vars.MGT_BASE_URL || 'https://mgt-engenharia-homologacao.onrender.com' }}/diario-oficial/executar-automatico/")
           echo "Resposta: $resposta"
