@@ -5,6 +5,32 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+def _sanear_duplicatas(apps, schema_editor):
+    """Bancos antigos (homologação) têm dados de teste que violam as
+    constraints criadas abaixo: RATs repetidas no mesmo projeto/dia e
+    medições com número repetido no projeto. Sem este saneamento o
+    CREATE UNIQUE INDEX falha e o deploy inteiro aborta."""
+    from django.db.models import Count, Min
+
+    RAT = apps.get_model("core", "RAT")
+    dups = (RAT.objects.values("project_id", "service_date")
+            .annotate(n=Count("id"), first=Min("id")).filter(n__gt=1))
+    for d in dups:
+        (RAT.objects
+         .filter(project_id=d["project_id"], service_date=d["service_date"])
+         .exclude(pk=d["first"]).delete())
+
+    Measurement = apps.get_model("core", "Measurement")
+    vistos = {}
+    for m in Measurement.objects.order_by("project_id", "number", "id"):
+        chave = (m.project_id, m.number)
+        if chave in vistos:
+            maior = max(n for (p, n) in vistos if p == m.project_id) + 1
+            m.number = maior
+            m.save(update_fields=["number"])
+        vistos[(m.project_id, m.number)] = True
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -103,6 +129,7 @@ class Migration(migrations.Migration):
             name='measurement',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='rats', to='core.measurement', verbose_name='medição'),
         ),
+        migrations.RunPython(_sanear_duplicatas, migrations.RunPython.noop),
         migrations.AddConstraint(
             model_name='rat',
             constraint=models.UniqueConstraint(fields=('project', 'service_date'), name='uniq_rat_projeto_dia'),
