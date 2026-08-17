@@ -69,6 +69,25 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "MGT Eng
 MGT_LEAD_NOTIFICATION_EMAIL = os.getenv("MGT_LEAD_NOTIFICATION_EMAIL", "mgtengenharia.ia@gmail.com")
 GAZETTE_CRON_TOKEN = os.getenv("GAZETTE_CRON_TOKEN", "")
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Sem esta config, o handler console padrão do Django filtra tudo com
+# require_debug_true — em produção (DEBUG=False) os erros 500 somem dos
+# logs e o diagnóstico fica às cegas. Aqui todo traceback vai pro
+# console (stdout do gunicorn → logs do Render).
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {"format": "[{levelname}] {asctime} {name} {message}", "style": "{"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "verbose"},
+    },
+    "root": {"handlers": ["console"], "level": "WARNING"},
+    "loggers": {
+        "django.request": {"handlers": ["console"], "level": "ERROR", "propagate": False},
+    },
+}
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
