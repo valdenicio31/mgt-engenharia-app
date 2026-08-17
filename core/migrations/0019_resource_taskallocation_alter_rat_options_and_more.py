@@ -33,6 +33,13 @@ def _sanear_duplicatas(apps, schema_editor):
 
 class Migration(migrations.Migration):
 
+    # No Postgres, o DELETE do _sanear_duplicatas deixa triggers de
+    # integridade pendentes na core_rat e o AddConstraint seguinte falha
+    # com "cannot ALTER TABLE ... because it has pending trigger events"
+    # se tudo rodar numa transação só. Não-atômica, cada operação commita
+    # separadamente e o saneamento fecha antes das constraints.
+    atomic = False
+
     dependencies = [
         ('core', '0018_merge_20260812_0535'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
