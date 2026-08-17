@@ -640,7 +640,13 @@ def client_contract(request, pk):
         opportunity = (client.opportunities.filter(stage="ganha").order_by("-updated_at").first()
                        or client.opportunities.order_by("-updated_at").first())
     infractions = opportunity.infractions.all() if opportunity else AutovistoriaInfraction.objects.filter(client=client)
-    total = (opportunity.estimated_value if opportunity else None) or Decimal("0")
+    # O valor do contrato é o da PROPOSTA ACEITA — é ela que o condomínio
+    # aprovou. O valor estimado da oportunidade é só o palpite comercial e
+    # fica como reserva, para o caso de ainda não haver proposta aceita.
+    proposta = (Proposal.objects.filter(opportunity=opportunity, status="aceita")
+                .order_by("-updated_at").first() if opportunity else None)
+    total = (proposta.amount if proposta else None) or \
+            (opportunity.estimated_value if opportunity else None) or Decimal("0")
     centavos = Decimal("0.01")
     sinal = (total * Decimal("0.30")).quantize(centavos, rounding=ROUND_HALF_UP)
     saldo = total - sinal
@@ -657,11 +663,14 @@ def client_contract(request, pk):
         ("3. Análise e laudo técnico", "Consolidação das evidências, classificação e emissão do laudo", f"Semanas {fim_vistoria + 1} a {fim_laudo}"),
         ("4. Plano de ação e encerramento", "Orientação das providências, medição final e entrega", f"Semanas {fim_laudo + 1} a {weeks}"),
     ]
+    # O saldo é dividido nas 3 medições; a última absorve a diferença de
+    # arredondamento para o somatório fechar exatamente com o total.
+    ultima = (saldo - parcela * 2).quantize(centavos, rounding=ROUND_HALF_UP) if saldo else Decimal("0")
     medicoes = [
         ("Sinal (assinatura do contrato)", "30% do valor", sinal),
-        ("Medição 1 — conclusão da vistoria em campo", "sobre o saldo, conforme avanço", None),
-        ("Medição 2 — entrega do laudo técnico", "sobre o saldo, conforme avanço", None),
-        ("Medição final — plano de ação e encerramento", "sobre o saldo, conforme avanço", None),
+        ("Medição 1 — conclusão da vistoria em campo", "1/3 do saldo, conforme avanço", parcela),
+        ("Medição 2 — entrega do laudo técnico", "1/3 do saldo, conforme avanço", parcela),
+        ("Medição final — plano de ação e encerramento", "saldo remanescente, conforme avanço", ultima),
     ]
     return render(request, "client_contract.html", {
         "client": client, "opportunity": opportunity, "infractions": infractions,
