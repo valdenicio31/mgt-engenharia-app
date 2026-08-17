@@ -1,4 +1,4 @@
-﻿{% comment %}MGT_LOGIN_OFICIAL_RECONSTRUCAO_V1{% endcomment %}<!-- MGT_LOGIN_OFICIAL_RECONSTRUCAO_V1 -->
+{% comment %}MGT_LOGIN_OFICIAL_RECONSTRUCAO_V1{% endcomment %}<!-- MGT_LOGIN_OFICIAL_RECONSTRUCAO_V1 -->
 {% load static %}
 <!doctype html>
 <html lang="pt-br">
@@ -8,27 +8,27 @@
   <title>MGT Engenharia | Acesso</title>
   <style>
     :root{
-      --navy:#06182d;
-      --navy-2:#0b2747;
-      --gold:#d6a21f;
-      --gold-2:#f0c14b;
+      --navy:#103762;
+      --navy-2:#1F5AA8;
+      --gold:#F7B500;
+      --gold-2:#FFD34D;
       --white:#ffffff;
-      --text:#0c1726;
-      --muted:#667085;
-      --line:#d7dee8;
-      --bg:#eef2f7;
+      --text:#16212e;
+      --muted:#5b6b7f;
+      --line:#dde6f0;
+      --bg:#f4f7fb;--verde:#7FBE41;--verde-dark:#4E8226;
     }
     *{box-sizing:border-box}
     html,body{margin:0;min-height:100%;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
     body{min-height:100vh}
-    .login-shell{min-height:100vh;display:grid;grid-template-columns:minmax(420px,1.08fr) minmax(420px,.92fr);background:linear-gradient(135deg,var(--navy),#0a2340)}
+    .login-shell{min-height:100vh;display:grid;grid-template-columns:minmax(420px,1.08fr) minmax(420px,.92fr);background:linear-gradient(135deg,var(--navy),#0d2c4f)}
     .brand-panel{position:relative;overflow:hidden;padding:48px 56px 38px;color:#fff;display:flex;flex-direction:column;justify-content:space-between}
     .brand-panel:before{content:"";position:absolute;inset:0;background:
-      radial-gradient(circle at 18% 20%,rgba(240,193,75,.18),transparent 28%),
+      radial-gradient(circle at 18% 20%,rgba(247,181,0,.18),transparent 28%),
       linear-gradient(120deg,rgba(255,255,255,.03),transparent 55%)}
     .building{position:absolute;right:-45px;bottom:-40px;width:72%;height:78%;opacity:.23;transform:skewY(-3deg);
       background:
-      linear-gradient(90deg,transparent 0 12%,rgba(214,162,31,.45) 12% 13%,transparent 13% 25%,rgba(214,162,31,.4) 25% 26%,transparent 26% 39%,rgba(214,162,31,.4) 39% 40%,transparent 40% 53%,rgba(214,162,31,.4) 53% 54%,transparent 54% 67%,rgba(214,162,31,.4) 67% 68%,transparent 68%),
+      linear-gradient(90deg,transparent 0 12%,rgba(247,181,0,.45) 12% 13%,transparent 13% 25%,rgba(247,181,0,.4) 25% 26%,transparent 26% 39%,rgba(247,181,0,.4) 39% 40%,transparent 40% 53%,rgba(247,181,0,.4) 53% 54%,transparent 54% 67%,rgba(247,181,0,.4) 67% 68%,transparent 68%),
       repeating-linear-gradient(0deg,rgba(255,255,255,.12) 0 2px,transparent 2px 32px),
       linear-gradient(160deg,#2b3f55,#091a2e)}
     .brand-content,.brand-footer{position:relative;z-index:1}
@@ -42,7 +42,7 @@
     .description{max-width:560px;font-size:18px;line-height:1.55;color:#e7edf5}
     .features{display:grid;gap:18px;margin-top:40px;max-width:560px}
     .feature{display:grid;grid-template-columns:58px 1fr;gap:16px;align-items:center}
-    .feature-icon{width:54px;height:54px;border:1.5px solid var(--gold);border-radius:16px;display:grid;place-items:center;color:var(--gold-2);font-size:25px}
+    .feature-icon{width:54px;height:54px;border:1.5px solid var(--verde);border-radius:16px;display:grid;place-items:center;color:var(--verde);font-size:25px}
     .feature strong{display:block;color:var(--gold-2);font-size:17px;margin-bottom:4px}
     .feature span{font-size:14px;line-height:1.4;color:#eef3f8}
     .brand-footer{display:flex;justify-content:space-between;gap:18px;font-size:13px;color:#d5dde8}
@@ -62,10 +62,10 @@
     .field{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;background:#fff;box-shadow:0 2px 7px rgba(16,24,40,.05)}
     .field span{padding-left:16px;color:#6a7790;font-size:18px}
     .field input{width:100%;border:0;outline:0;padding:15px 16px;font-size:16px;background:transparent}
-    .submit-btn{width:100%;border:0;border-radius:10px;background:linear-gradient(90deg,var(--navy),var(--navy-2));color:#fff;font-size:17px;font-weight:700;padding:16px;cursor:pointer;box-shadow:0 8px 20px rgba(6,24,45,.2)}
+    .submit-btn{width:100%;border:0;border-radius:10px;background:linear-gradient(90deg,var(--navy),var(--navy-2));color:#fff;font-size:17px;font-weight:700;padding:16px;cursor:pointer;box-shadow:0 8px 20px rgba(16,55,98,.25)}
     .submit-btn:hover{filter:brightness(1.08)}
     .links{display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin-top:20px}
-    .links a{color:#0b4ca8;text-decoration:none;font-weight:600;font-size:14px}
+    .links a{color:#1F5AA8;text-decoration:none;font-weight:600;font-size:14px}
     .links a:hover{text-decoration:underline}
     .messages{margin:0 0 18px;padding:0;list-style:none}
     .messages li{background:#fff4e5;border-left:4px solid var(--gold);padding:12px 14px;border-radius:8px;color:#6b4b00}
