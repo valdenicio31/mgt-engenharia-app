@@ -25,3 +25,16 @@ class AuthenticationTests(TestCase):
         self.assertContains(response, "Este e-mail já está cadastrado")
     def test_password_reset_page_exists(self):
         self.assertEqual(self.client.get(reverse("password_reset")).status_code, 200)
+    def test_login_recusado_explica_o_motivo(self):
+        # Achado do smoke test do RC28 na homologação: o template do login
+        # só renderizava `messages` e nunca `form.errors`, então qualquer
+        # login recusado — senha errada ou cadastro ainda não aprovado —
+        # recarregava a tela em branco, sem dizer nada ao usuário.
+        pendente = get_user_model().objects.create_user(username="pendente", email="pendente@example.com", password="SenhaForte!2026")
+        pendente.is_active = False
+        pendente.save(update_fields=["is_active"])
+        response = self.client.post(reverse("login"), {"username": "pendente@example.com", "password": "SenhaForte!2026"})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.wsgi_request.user.is_authenticated)
+        self.assertContains(response, "Não foi possível entrar")
+        self.assertContains(response, "aprovação de um administrador")
